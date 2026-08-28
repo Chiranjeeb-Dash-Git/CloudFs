@@ -224,8 +224,13 @@ filesRouter.get("/:id/download", requireAuth, (req, res, next) => {
     const dest = path.join(storageDir, file.id);
     if (!fs.existsSync(dest)) throw fail(404, "NOT_FOUND", "Object missing from storage");
     logActivity(req.user.id, "download", "file", file.id, {});
-    res.setHeader("Content-Disposition", `attachment; filename="${file.name}"`);
+    res.setHeader("Content-Type", file.mimeType || "application/octet-stream");
     res.setHeader("Cache-Control", "private, max-age=60");
+    if (req.query.inline === "true") {
+      res.setHeader("Content-Disposition", "inline");
+    } else {
+      res.setHeader("Content-Disposition", `attachment; filename="${file.name}"`);
+    }
     res.sendFile(dest);
   } catch (err) {
     next(err);

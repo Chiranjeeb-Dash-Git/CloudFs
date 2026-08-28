@@ -98,6 +98,16 @@ const ICONS = {
       <path d="M6 6l12 12M18 6 6 18" />
     </svg>
   ),
+  maximize: (
+    <svg viewBox="0 0 24 24" className="w-[1.2em] h-[1.2em]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+    </svg>
+  ),
+  minimize: (
+    <svg viewBox="0 0 24 24" className="w-[1.2em] h-[1.2em]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M10 14l-7 7" />
+    </svg>
+  ),
   chart: (
     <svg viewBox="0 0 24 24" className="w-[1.2em] h-[1.2em]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
       <path d="M4 20V10M11 20V4M18 20v-7" />
@@ -229,11 +239,22 @@ function FileModalViewer({ file }: { file: FileItem }) {
     async function load() {
       try {
         const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
-        const res = await fetch(`${API_BASE}/api/files/${file.id}/download`, {
+        const res = await fetch(`${API_BASE}/api/files/${file.id}/download?inline=true`, {
           credentials: "include",
         });
         if (!res.ok) throw new Error(`Failed to download file (${res.status})`);
-        const blob = await res.blob();
+        const rawBlob = await res.blob();
+        
+        let mime = rawBlob.type;
+        if (file.type === "pdf") {
+          mime = "application/pdf";
+        } else if (file.type === "photo") {
+          mime = "image/jpeg";
+        } else if (file.type === "video") {
+          mime = "video/mp4";
+        }
+        
+        const blob = new Blob([rawBlob], { type: mime });
         if (active) {
           objectUrl = URL.createObjectURL(blob);
           setUrl(objectUrl);
@@ -255,7 +276,7 @@ function FileModalViewer({ file }: { file: FileItem }) {
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [file.id]);
+  }, [file.id, file.type]);
 
   if (loading) {
     return (
@@ -275,27 +296,19 @@ function FileModalViewer({ file }: { file: FileItem }) {
 
   if (!url) return null;
 
-  if (file.type === "photo") {
-    return <img src={url} alt={file.name} className="max-w-full max-h-full object-contain block mx-auto" />;
-  }
-
-  if (file.type === "video") {
-    return (
-      <video src={url} controls autoPlay className="max-w-full max-h-full object-contain block mx-auto">
-        Your browser does not support the video tag.
-      </video>
-    );
-  }
-
-  if (file.type === "pdf") {
-    return (
-      <iframe src={`${url}#toolbar=0`} className="w-full h-full border-0" title={file.name} />
-    );
-  }
-
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-muted-foreground">
-      <span className="text-sm font-mono">No preview available</span>
+    <div className="w-full h-full flex items-center justify-center overflow-hidden bg-black/40">
+      {file.type === "photo" && (
+        <img src={url} alt={file.name} className="max-w-full max-h-full object-contain block select-none" />
+      )}
+      {file.type === "video" && (
+        <video src={url} controls autoPlay className="max-w-full max-h-full object-contain block">
+          Your browser does not support the video tag.
+        </video>
+      )}
+      {file.type === "pdf" && (
+        <iframe src={url} className="w-full h-full border-0 block" title={file.name} />
+      )}
     </div>
   );
 }
@@ -563,6 +576,7 @@ export default function GalleryPage() {
     .map((f, i) => fileToItem(f, i));
 
   const [activeModalFile, setActiveModalFile] = useState<FileItem | null>(null);
+  const [isZoomed, setIsZoomed] = useState(false);
 
   const headlineCanvasRef = useRef<HTMLCanvasElement>(null);
   const waveCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -1199,7 +1213,17 @@ export default function GalleryPage() {
           opacity: 0;
           transition:
             transform 0.6s var(--ease-cinema),
-            opacity 0.5s var(--ease-cinema);
+            opacity 0.5s var(--ease-cinema),
+            width 0.4s var(--ease-cinema),
+            max-height 0.4s var(--ease-cinema);
+        }
+        .modal-shell.zoomed {
+          grid-template-columns: 1fr;
+          width: min(1200px, 96vw);
+          max-height: 92vh;
+        }
+        .modal-shell.zoomed .modal-info {
+          display: none;
         }
         .modal-backdrop.open .modal-shell {
           transform: scale(1) translateY(0);
@@ -1248,6 +1272,30 @@ export default function GalleryPage() {
           background: var(--luxe);
           color: #141208;
           transform: rotate(90deg);
+        }
+        .modal-zoom {
+          position: absolute;
+          top: 18px;
+          right: 64px;
+          z-index: 5;
+          width: 38px;
+          height: 38px;
+          border-radius: 9999px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: oklch(1 0 0 / 10%);
+          border: 1px solid oklch(1 0 0 / 16%);
+          color: #fff;
+          cursor: pointer;
+          transition:
+            transform 0.3s ease,
+            background 0.3s ease;
+        }
+        .modal-zoom:hover {
+          background: var(--luxe);
+          color: #141208;
+          transform: scale(1.1);
         }
 
         .video-text-wrap {
@@ -1530,11 +1578,32 @@ export default function GalleryPage() {
       </main>
 
       {/* Modal Dialog Backdrop */}
-      <div className={`modal-backdrop ${activeModalFile ? "open" : ""}`} onClick={() => setActiveModalFile(null)}>
+      <div
+        className={`modal-backdrop ${activeModalFile ? "open" : ""}`}
+        onClick={() => {
+          setActiveModalFile(null);
+          setIsZoomed(false);
+        }}
+      >
         {activeModalFile && (
-          <div className="modal-shell" onClick={(e) => e.stopPropagation()}>
+          <div className={`modal-shell ${isZoomed ? "zoomed" : ""}`} onClick={(e) => e.stopPropagation()}>
             <div className="modal-media">
-              <button className="modal-close" onClick={() => setActiveModalFile(null)} aria-label="Close">
+              <button
+                className="modal-zoom"
+                onClick={() => setIsZoomed(!isZoomed)}
+                title={isZoomed ? "Minimize View" : "Zen Zoom Mode"}
+                aria-label={isZoomed ? "Minimize View" : "Zen Zoom Mode"}
+              >
+                {isZoomed ? ICONS.minimize : ICONS.maximize}
+              </button>
+              <button
+                className="modal-close"
+                onClick={() => {
+                  setActiveModalFile(null);
+                  setIsZoomed(false);
+                }}
+                aria-label="Close"
+              >
                 {ICONS.close}
               </button>
 
