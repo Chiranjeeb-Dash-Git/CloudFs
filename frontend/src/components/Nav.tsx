@@ -8,6 +8,7 @@ import { useDriveUi } from "@/components/DriveUi";
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/files", label: "Files" },
+  { href: "/gallery", label: "Gallery" },
   { href: "/shared", label: "Shared" },
   { href: "/security", label: "Security" },
   { href: "/settings", label: "Settings" },
