@@ -4,6 +4,8 @@ import { Search, Bell, Upload, Cloud } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useDriveUi } from "@/components/DriveUi";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
@@ -18,6 +20,17 @@ export function Nav({ theme = "mono", showUpload = true }: { theme?: "nexacore" 
   const pathname = usePathname();
   const ui = useDriveUi();
   const activeIndex = navItems.findIndex((item) => pathname?.startsWith(item.href));
+
+  const { data } = useQuery({ queryKey: ["me"], queryFn: api.me, retry: false });
+  const user = data?.user;
+  const initials = user?.name
+    ? user.name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "AK";
 
   const themeClasses = {
     nexacore: {
@@ -110,7 +123,7 @@ export function Nav({ theme = "mono", showUpload = true }: { theme?: "nexacore" 
             href="/settings"
             className={`${t.avatar} flex size-10 items-center justify-center rounded-full text-xs font-semibold`}
           >
-            AK
+            {initials}
           </Link>
         ) : null}
       </div>

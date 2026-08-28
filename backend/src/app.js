@@ -14,6 +14,7 @@ import { activitiesRouter } from "./routes/activities.js";
 import { settingsRouter } from "./routes/settings.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { usersRouter } from "./routes/users.js";
+import { oauthRouter } from "./routes/oauth.js";
 import { sendError } from "./util.js";
 
 export function createApp() {
@@ -62,6 +63,7 @@ export function createApp() {
   app.use("/api/settings", settingsRouter);
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/users", usersRouter);
+  app.use("/api/oauth", oauthRouter);
 
   // Mounted at /api: shares (user + link), search, stars, trash
   app.use("/api", sharesRouter);

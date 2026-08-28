@@ -3,10 +3,12 @@
 import { Upload } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
 
 export function UploadModal({ onClose }: { onClose: () => void }) {
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const queryClient = useQueryClient();
 
   async function handleFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -31,6 +33,10 @@ export function UploadModal({ onClose }: { onClose: () => void }) {
         }
       }
       setStatus("Upload complete.");
+      queryClient.invalidateQueries({ queryKey: ["recent"] });
+      queryClient.invalidateQueries({ queryKey: ["storage"] });
+      queryClient.invalidateQueries({ queryKey: ["search"] });
+      queryClient.invalidateQueries({ queryKey: ["folder"] });
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Upload failed");
     } finally {

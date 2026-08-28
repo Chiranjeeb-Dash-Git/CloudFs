@@ -3,13 +3,56 @@
 import { useEffect } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import { EmberParticles } from "@/components/EmberParticles";
 import { Nav } from "@/components/Nav";
+import { useDriveUi } from "@/components/DriveUi";
 
 gsap.registerPlugin(ScrollTrigger);
 
+function formatBytes(bytes: number, decimals = 1) {
+  if (bytes === 0) return "0 Bytes";
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
+}
+
 export default function FilesPage() {
+  const router = useRouter();
+  const ui = useDriveUi();
+
+  const { data: meData, error: meError, isLoading: meLoading } = useQuery({
+    queryKey: ["me"],
+    queryFn: api.me,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (meError) router.push("/login");
+  }, [meError, router]);
+
+  const { data: storageData } = useQuery({
+    queryKey: ["storage"],
+    queryFn: api.storage,
+    refetchInterval: 5000,
+  });
+
+  const { data: recentData } = useQuery({
+    queryKey: ["recent"],
+    queryFn: api.recent,
+    refetchInterval: 3000,
+  });
+
+  const { data: searchData } = useQuery({
+    queryKey: ["search", ""],
+    queryFn: () => api.search(""),
+    refetchInterval: 5000,
+  });
+
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (prefersReducedMotion) return;
@@ -36,6 +79,30 @@ export default function FilesPage() {
     return () => ctx.revert();
   }, []);
 
+  // Derive file counts per category from search results
+  const allFiles = (searchData?.results ?? []).filter((r: any) => "mimeType" in r);
+  const imageFiles = allFiles.filter((f: any) => (f.mimeType || "").startsWith("image/"));
+  const videoFiles = allFiles.filter((f: any) => (f.mimeType || "").startsWith("video/"));
+  const docFiles = allFiles.filter((f: any) => !((f.mimeType || "").startsWith("image/") || (f.mimeType || "").startsWith("video/")));
+  const imageSize = imageFiles.reduce((acc: number, f: any) => acc + (f.sizeBytes || 0), 0);
+  const videoSize = videoFiles.reduce((acc: number, f: any) => acc + (f.sizeBytes || 0), 0);
+  const docSize = docFiles.reduce((acc: number, f: any) => acc + (f.sizeBytes || 0), 0);
+
+  const recentFiles = recentData?.items ?? [];
+  const recentToday = recentFiles.filter((f) => {
+    const d = new Date(f.createdAt);
+    const now = new Date();
+    return d.toDateString() === now.toDateString();
+  });
+
+  if (meLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#050505] text-white">
+        <div className="font-mono text-sm tracking-widest animate-pulse">LOADING FILES...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="theme-studio min-h-screen text-white antialiased overflow-x-hidden selection:bg-[#4A1711]/40">
       <EmberParticles />
@@ -53,7 +120,9 @@ export default function FilesPage() {
           <h1 className="font-display italic text-5xl md:text-6xl font-light tracking-tight text-white leading-[1.05]">
             Files, held with care.
           </h1>
-          <p className="text-sm text-[#c9beb2] leading-relaxed mt-4 font-mono">Digital experiences. Driven by data. Crafted with care.</p>
+          <p className="text-sm text-[#c9beb2] leading-relaxed mt-4 font-mono">
+            {formatBytes(storageData?.usedBytes ?? 0)} used of {formatBytes(storageData?.quotaBytes ?? 0)} — {storageData?.fileCount ?? 0} files across {storageData?.folderCount ?? 0} folders.
+          </p>
         </header>
 
         {/* Bento grid */}
@@ -73,7 +142,7 @@ export default function FilesPage() {
 
               <div className="relative">
                 <div className="font-display italic text-7xl md:text-8xl font-normal tracking-tight" style={{ color: "var(--ink)" }}>
-                  25k<span className="text-4xl align-top">+</span>
+                  {allFiles.length}<span className="text-4xl align-top">+</span>
                 </div>
                 <div className="hairline my-4" style={{ background: "linear-gradient(90deg, var(--border), transparent)" }} />
                 <p className="text-sm max-w-sm font-mono" style={{ color: "var(--ink-soft)" }}>
@@ -90,11 +159,11 @@ export default function FilesPage() {
               <div className="relative flex items-start justify-between">
                 <div>
                   <span className="text-[10px] font-mono tracking-widest" style={{ color: "var(--ink-soft)" }}>N° 02</span>
-                  <h3 className="font-display italic text-2xl font-normal tracking-tight mt-0.5" style={{ color: "var(--ink)" }}>Design Assets</h3>
+                  <h3 className="font-display italic text-2xl font-normal tracking-tight mt-0.5" style={{ color: "var(--ink)" }}>Images</h3>
                 </div>
                 <iconify-icon icon="solar:pallete-2-linear" className="text-xl" style={{ color: "var(--primary)" }} />
               </div>
-              <span className="relative text-xs font-mono" style={{ color: "var(--ink-soft)" }}>1,204 files · 68 GB</span>
+              <span className="relative text-xs font-mono" style={{ color: "var(--ink-soft)" }}>{imageFiles.length} files · {formatBytes(imageSize)}</span>
             </div>
           </article>
 
@@ -105,11 +174,11 @@ export default function FilesPage() {
               <div className="relative flex items-start justify-between">
                 <div>
                   <span className="text-[10px] font-mono tracking-widest" style={{ color: "var(--ink-soft)" }}>N° 03</span>
-                  <h3 className="font-display italic text-2xl font-normal tracking-tight mt-0.5" style={{ color: "var(--ink)" }}>Photography Library</h3>
+                  <h3 className="font-display italic text-2xl font-normal tracking-tight mt-0.5" style={{ color: "var(--ink)" }}>Videos</h3>
                 </div>
                 <iconify-icon icon="solar:gallery-wide-linear" className="text-xl" style={{ color: "var(--primary)" }} />
               </div>
-              <span className="relative text-xs font-mono" style={{ color: "var(--ink-soft)" }}>6,512 files · 412 GB</span>
+              <span className="relative text-xs font-mono" style={{ color: "var(--ink-soft)" }}>{videoFiles.length} files · {formatBytes(videoSize)}</span>
             </div>
           </article>
 
@@ -122,8 +191,8 @@ export default function FilesPage() {
                 <iconify-icon icon="solar:videocamera-record-linear" className="text-xl" style={{ color: "var(--primary)" }} />
               </div>
               <div className="relative">
-                <h3 className="font-display italic text-lg font-normal tracking-tight" style={{ color: "var(--ink)" }}>Marketing Videos</h3>
-                <span className="text-xs font-mono" style={{ color: "var(--ink-soft)" }}>340 files · 210 GB</span>
+                <h3 className="font-display italic text-lg font-normal tracking-tight" style={{ color: "var(--ink)" }}>Documents</h3>
+                <span className="text-xs font-mono" style={{ color: "var(--ink-soft)" }}>{docFiles.length} files · {formatBytes(docSize)}</span>
               </div>
             </div>
           </article>
@@ -137,13 +206,13 @@ export default function FilesPage() {
                 <iconify-icon icon="solar:document-text-linear" className="text-xl" style={{ color: "var(--primary)" }} />
               </div>
               <div className="relative">
-                <h3 className="font-display italic text-lg font-normal tracking-tight" style={{ color: "var(--ink)" }}>Client Contracts</h3>
-                <span className="text-xs font-mono" style={{ color: "var(--ink-soft)" }}>89 files · 1.1 GB</span>
+                <h3 className="font-display italic text-lg font-normal tracking-tight" style={{ color: "var(--ink)" }}>Shared Files</h3>
+                <span className="text-xs font-mono" style={{ color: "var(--ink-soft)" }}>{storageData?.sharedCount ?? 0} shared</span>
               </div>
             </div>
           </article>
 
-          {/* Audio Masters */}
+          {/* Storage overview */}
           <article className="studio-card md:col-span-4" style={{ "--lift-delay": "3s" } as React.CSSProperties}>
             <div className="studio-card-inner sheen-studio ambient-loop h-full p-7 flex flex-col justify-between min-h-[160px]" style={{ "--sheen-delay": "5s" } as React.CSSProperties}>
               <div className="art-orb" style={{ width: "110px", height: "110px", bottom: "-30px", right: "-20px", background: "radial-gradient(circle, var(--primary) 0%, transparent 70%)", opacity: 0.3, animationDelay: "-8s" }} />
@@ -152,8 +221,8 @@ export default function FilesPage() {
                 <iconify-icon icon="solar:music-note-3-linear" className="text-xl" style={{ color: "var(--primary)" }} />
               </div>
               <div className="relative">
-                <h3 className="font-display italic text-lg font-normal tracking-tight" style={{ color: "var(--ink)" }}>Audio Masters</h3>
-                <span className="text-xs font-mono" style={{ color: "var(--ink-soft)" }}>275 files · 34 GB</span>
+                <h3 className="font-display italic text-lg font-normal tracking-tight" style={{ color: "var(--ink)" }}>Storage</h3>
+                <span className="text-xs font-mono" style={{ color: "var(--ink-soft)" }}>{formatBytes(storageData?.usedBytes ?? 0)} of {formatBytes(storageData?.quotaBytes ?? 0)}</span>
               </div>
             </div>
           </article>
@@ -163,25 +232,25 @@ export default function FilesPage() {
         <section className="my-16 flex items-center gap-6">
           <span className="hairline flex-1" />
           <p className="font-display italic text-2xl md:text-3xl text-center text-[#e8ded2] max-w-xl leading-snug px-4">
-            "Every file, considered — secured, versioned, and beautifully kept."
+            &quot;Every file, considered — secured, versioned, and beautifully kept.&quot;
           </p>
           <span className="hairline flex-1" />
         </section>
 
         <section className="grid grid-cols-1 md:grid-cols-2 gap-5 lg:gap-6">
-          {/* Brand Guidelines */}
+          {/* Upload card */}
           <article className="studio-card" style={{ "--lift-delay": "3.6s" } as React.CSSProperties}>
-            <div className="studio-card-inner sheen-studio ambient-loop h-full p-7 flex items-center justify-between min-h-[120px]" style={{ "--sheen-delay": "0.5s" } as React.CSSProperties}>
+            <button onClick={ui.openUpload} className="studio-card-inner sheen-studio ambient-loop h-full p-7 flex items-center justify-between min-h-[120px] w-full text-left" style={{ "--sheen-delay": "0.5s" } as React.CSSProperties}>
               <div className="art-orb" style={{ width: "130px", height: "130px", top: "-30px", left: "40%", background: "radial-gradient(circle, var(--gold) 0%, transparent 70%)", opacity: 0.25 }} />
               <div className="relative">
                 <span className="text-[10px] font-mono tracking-widest" style={{ color: "var(--ink-soft)" }}>N° 07</span>
-                <h3 className="font-display italic text-xl font-normal tracking-tight" style={{ color: "var(--ink)" }}>Brand Guidelines</h3>
-                <span className="text-xs font-mono" style={{ color: "var(--ink-soft)" }}>12 files · updated 2 days ago</span>
+                <h3 className="font-display italic text-xl font-normal tracking-tight" style={{ color: "var(--ink)" }}>Upload Files</h3>
+                <span className="text-xs font-mono" style={{ color: "var(--ink-soft)" }}>Drop files into CloudFS</span>
               </div>
               <div className="relative w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "var(--primary)" }}>
                 <iconify-icon icon="solar:arrow-right-up-linear" className="text-white text-xl" />
               </div>
-            </div>
+            </button>
           </article>
 
           {/* Recently modified */}
@@ -191,7 +260,7 @@ export default function FilesPage() {
               <div className="relative">
                 <span className="text-[10px] font-mono tracking-widest" style={{ color: "var(--ink-soft)" }}>N° 08</span>
                 <h3 className="font-display italic text-xl font-normal tracking-tight" style={{ color: "var(--ink)" }}>Recently Modified</h3>
-                <span className="text-xs font-mono" style={{ color: "var(--ink-soft)" }}>18 files touched today</span>
+                <span className="text-xs font-mono" style={{ color: "var(--ink-soft)" }}>{recentToday.length} files touched today</span>
               </div>
               <div className="relative w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "var(--primary)" }}>
                 <iconify-icon icon="solar:clock-circle-linear" className="text-white text-xl" />

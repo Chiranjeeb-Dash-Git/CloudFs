@@ -181,6 +181,76 @@ const googleSchema = z.object({
   googleSub: z.string().min(1),
 });
 
+// ─── 2FA (TOTP) — spec §8 ───────────────────────────────────────────────────
+// Two-step flow: enable → confirm → disable
+const twoFactorCodeSchema = z.object({ code: z.string().regex(/^\d{6}$/) });
+
+authRouter.post("/2fa/enable", requireAuth, async (req, res, next) => {
+  try {
+    const user = mem.users.find((u) => u.id === req.user.id);
+    if (!user) throw fail(404, "NOT_FOUND", "User not found");
+    if (user.twoFactorEnabled) {
+      return res.json({ ok: true, message: "2FA is already enabled" });
+    }
+    // Generate a new secret (6-digit demo seed; real impl uses speakeasy/otpauth)
+    const crypto = await import("node:crypto");
+    const secret = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+    user.twoFactorSecret = secret;
+    // twoFactorEnabled stays false until /2fa/confirm
+    res.json({
+      ok: true,
+      otpAuthUrl: `otpauth://totp/CloudFS:${user.email}?secret=${secret}&issuer=CloudFS`,
+      secret,
+      message: "Scan the QR code, then call /api/auth/2fa/confirm with the 6-digit code",
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+authRouter.post("/2fa/confirm", requireAuth, (req, res, next) => {
+  try {
+    const { code } = twoFactorCodeSchema.parse(req.body);
+    const user = mem.users.find((u) => u.id === req.user.id);
+    if (!user) throw fail(404, "NOT_FOUND", "User not found");
+    if (user.twoFactorEnabled) {
+      return res.json({ ok: true, message: "2FA is already enabled" });
+    }
+    if (!user.twoFactorSecret) {
+      throw fail(400, "VALIDATION", "Call /api/auth/2fa/enable first to generate a secret");
+    }
+    if (code !== user.twoFactorSecret) {
+      throw fail(400, "VALIDATION", "Invalid 2FA code");
+    }
+    user.twoFactorEnabled = true;
+    res.json({ ok: true, twoFactorEnabled: true });
+  } catch (err) {
+    if (err.name === "ZodError") return next(fail(400, "VALIDATION", err.errors[0]?.message ?? "Invalid payload"));
+    next(err);
+  }
+});
+
+authRouter.post("/2fa/disable", requireAuth, (req, res, next) => {
+  try {
+    const { code } = twoFactorCodeSchema.parse(req.body);
+    const user = mem.users.find((u) => u.id === req.user.id);
+    if (!user) throw fail(404, "NOT_FOUND", "User not found");
+    if (!user.twoFactorEnabled) {
+      return res.json({ ok: true, twoFactorEnabled: false });
+    }
+    if (code !== user.twoFactorSecret) {
+      throw fail(400, "VALIDATION", "Invalid 2FA code");
+    }
+    user.twoFactorEnabled = false;
+    user.twoFactorSecret = null;
+    res.json({ ok: true, twoFactorEnabled: false });
+  } catch (err) {
+    if (err.name === "ZodError") return next(fail(400, "VALIDATION", err.errors[0]?.message ?? "Invalid payload"));
+    next(err);
+  }
+});
+
+// ─── Google OAuth scaffold ──────────────────────────────────────────────────
 authRouter.post("/google", (req, res, next) => {
   try {
     const body = googleSchema.parse(req.body);

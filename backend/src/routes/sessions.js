@@ -71,6 +71,20 @@ sessionsRouter.post("/revoke-others", (req, res) => {
   res.json({ ok: true, revoked: count });
 });
 
+// DELETE /api/sessions — Revoke all sessions except current (spec §8 alias)
+sessionsRouter.delete("/", (req, res) => {
+  const jti = currentJtiFromReq(req);
+  let count = 0;
+  for (const s of mem.sessions.filter((s) => s.userId === req.user.id && !s.revokedAt && s.id !== jti)) {
+    s.revokedAt = mem.now();
+    for (const [token, data] of mem.refresh.entries()) {
+      if (data.jti === s.id) mem.refresh.delete(token);
+    }
+    count++;
+  }
+  res.json({ ok: true, revoked: count });
+});
+
 // 2FA — basic TOTP-like enable/disable. Real impl would use otpauth/speakeasy.
 const twoFactorSchema = z.object({ code: z.string().regex(/^\d{6}$/) });
 

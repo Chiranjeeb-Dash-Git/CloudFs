@@ -179,6 +179,11 @@ async function run() {
   const sess = await jget("/api/sessions", cookie1);
   assert(sess.status === 200 && sess.body.items?.length >= 1, "list sessions");
   const meId = sess.body.items.find((s) => s.current)?.id;
+
+  // Test DELETE /api/sessions (revoke others)
+  const revokeAllOthers = await jdelete("/api/sessions", cookie1);
+  assert(revokeAllOthers.status === 200 && revokeAllOthers.body.ok === true, "DELETE /api/sessions (revoke others)");
+
   await jdelete(`/api/sessions/${meId}`, cookie1); // revoke current — should clear cookie too
   // Restore by re-login
   const loginAgain = await jpost(
@@ -188,6 +193,37 @@ async function run() {
   );
   cookie1 = jar(loginAgain.headers);
   assert(loginAgain.status === 200, "re-login after revoke");
+
+  // Test 2FA flow at /api/auth/2fa/*
+  const enable2FA = await jpost("/api/auth/2fa/enable", {}, cookie1);
+  assert(enable2FA.status === 200 && enable2FA.body.secret, "2FA enable (generate secret)");
+  const totpSecret = enable2FA.body.secret;
+
+  const confirm2FAWrong = await jpost("/api/auth/2fa/confirm", { code: "000000" }, cookie1);
+  assert(confirm2FAWrong.status === 400, "2FA confirm with wrong code fails");
+
+  const confirm2FACorrect = await jpost("/api/auth/2fa/confirm", { code: totpSecret }, cookie1);
+  assert(confirm2FACorrect.status === 200 && confirm2FACorrect.body.twoFactorEnabled === true, "2FA confirm with correct code succeeds");
+
+  const disable2FA = await jpost("/api/auth/2fa/disable", { code: totpSecret }, cookie1);
+  assert(disable2FA.status === 200 && disable2FA.body.twoFactorEnabled === false, "2FA disable succeeds");
+
+  // Test OAuth connections
+  const oauthConn = await jget("/api/oauth/connections", cookie1);
+  assert(oauthConn.status === 200 && Array.isArray(oauthConn.body.connections), "GET /api/oauth/connections");
+
+  // Test Users settings / profile / plan
+  const patchUserMe = await jpatch("/api/users/me", { name: "Alice Spec-Compliant" }, cookie1);
+  assert(patchUserMe.status === 200 && patchUserMe.body.user?.name === "Alice Spec-Compliant", "PATCH /api/users/me");
+
+  const getUserNotifs = await jget("/api/users/me/notifications", cookie1);
+  assert(getUserNotifs.status === 200 && getUserNotifs.body.notifications, "GET /api/users/me/notifications");
+
+  const patchUserNotifs = await jpatch("/api/users/me/notifications", { email: false }, cookie1);
+  assert(patchUserNotifs.status === 200 && patchUserNotifs.body.notifications?.email === false, "PATCH /api/users/me/notifications");
+
+  const getUserPlan = await jget("/api/users/me/plan", cookie1);
+  assert(getUserPlan.status === 200 && getUserPlan.body.plan === "free", "GET /api/users/me/plan");
 
   // 18. Activities
   const acts = await jget("/api/activities", cookie1);

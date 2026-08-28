@@ -23,6 +23,8 @@ export const api = {
   login: (body: { email: string; password: string }) =>
     request("/api/auth/login", { method: "POST", body: JSON.stringify(body) }),
   logout: () => request("/api/auth/logout", { method: "POST" }),
+  file: (id: string) =>
+    request<{ file: DriveFile; signedUrl: string }>(`/api/files/${id}`),
   folder: (id: string) =>
     request<{
       folder: DriveFolder | null;
@@ -48,6 +50,38 @@ export const api = {
     ),
   uploadComplete: (body: { fileId: string; parts?: { partNumber: number; etag: string }[] }) =>
     request("/api/files/complete", { method: "POST", body: JSON.stringify(body) }),
+  storage: () =>
+    request<{
+      usedBytes: number;
+      quotaBytes: number;
+      freeBytes: number;
+      percentUsed: number;
+      fileCount: number;
+      folderCount: number;
+      sharedCount: number;
+    }>("/api/me/storage"),
+  recent: () => request<{ items: DriveFile[] }>("/api/files/recent"),
+  deleteFile: (id: string) => request<any>(`/api/files/${id}`, { method: "DELETE" }),
+  deleteFolder: (id: string) => request<any>(`/api/folders/${id}`, { method: "DELETE" }),
+  stars: () => request<{ items: Array<{ resourceType: "file" | "folder"; resourceId: string; resource: DriveFile | DriveFolder }> }>("/api/stars"),
+  addStar: (body: { resourceType: "file" | "folder"; resourceId: string }) =>
+    request("/api/stars", { method: "POST", body: JSON.stringify(body) }),
+  removeStar: (body: { resourceType: "file" | "folder"; resourceId: string }) =>
+    request("/api/stars", { method: "DELETE", body: JSON.stringify(body) }),
+  updateProfile: (body: { name?: string; imageUrl?: string | null }) =>
+    request<{ user: { id: string; email: string; name: string; imageUrl?: string } }>("/api/users/me", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  getNotifications: () =>
+    request<{ notifications: { email: boolean; share: boolean; security: boolean } }>("/api/users/me/notifications"),
+  updateNotifications: (body: { email?: boolean; share?: boolean; security?: boolean }) =>
+    request<{ notifications: { email: boolean; share: boolean; security: boolean } }>("/api/users/me/notifications", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteAllSessions: () =>
+    request("/api/sessions", { method: "DELETE" }),
 };
 
 export type DriveFolder = {

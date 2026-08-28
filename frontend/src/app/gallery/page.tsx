@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
+import { useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, DriveFile } from "@/lib/api";
 import { Nav } from "@/components/Nav";
+import { useDriveUi } from "@/components/DriveUi";
 
 /* ================= Custom SVG Icons matching the HTML style ================= */
 const ICONS = {
@@ -167,6 +171,135 @@ function burstConfetti(x: number, y: number) {
   }
 }
 
+/* ================= Live File Thumbnail component ================= */
+function FileThumbnail({ fileId, type, name, seed }: { fileId: string; type: string; name: string; seed: number }) {
+  const [src, setSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (type !== "photo") return;
+
+    let active = true;
+    let objectUrl: string | null = null;
+
+    async function load() {
+      try {
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+        const res = await fetch(`${API_BASE}/api/files/${fileId}/thumbnail`, {
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error("failed");
+        const blob = await res.blob();
+        if (active) {
+          objectUrl = URL.createObjectURL(blob);
+          setSrc(objectUrl);
+        }
+      } catch (err) {
+        // Fallback handled by return condition
+      }
+    }
+
+    load();
+
+    return () => {
+      active = false;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [fileId, type]);
+
+  if (type === "photo" && src) {
+    return <img src={src} alt={name} className="w-full h-full object-cover block" />;
+  }
+
+  // Fallback to portrait SVG for non-images or on error
+  return <div className="file-thumb-art h-full w-full">{portraitSVG(seed)}</div>;
+}
+
+/* ================= Live File Modal Viewer component ================= */
+function FileModalViewer({ file }: { file: FileItem }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl: string | null = null;
+
+    async function load() {
+      try {
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+        const res = await fetch(`${API_BASE}/api/files/${file.id}/download`, {
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error(`Failed to download file (${res.status})`);
+        const blob = await res.blob();
+        if (active) {
+          objectUrl = URL.createObjectURL(blob);
+          setUrl(objectUrl);
+          setLoading(false);
+        }
+      } catch (err) {
+        if (active) {
+          setError(err instanceof Error ? err.message : "Load failed");
+          setLoading(false);
+        }
+      }
+    }
+
+    load();
+
+    return () => {
+      active = false;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [file.id]);
+
+  if (loading) {
+    return (
+      <div className="flex h-full w-full items-center justify-center font-mono text-xs text-muted-foreground animate-pulse">
+        LOADING CONTENT...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-full w-full items-center justify-center font-mono text-xs text-red-500">
+        ERROR: {error}
+      </div>
+    );
+  }
+
+  if (!url) return null;
+
+  if (file.type === "photo") {
+    return <img src={url} alt={file.name} className="max-w-full max-h-full object-contain block mx-auto" />;
+  }
+
+  if (file.type === "video") {
+    return (
+      <video src={url} controls autoPlay className="max-w-full max-h-full object-contain block mx-auto">
+        Your browser does not support the video tag.
+      </video>
+    );
+  }
+
+  if (file.type === "pdf") {
+    return (
+      <iframe src={`${url}#toolbar=0`} className="w-full h-full border-0" title={file.name} />
+    );
+  }
+
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-muted-foreground">
+      <span className="text-sm font-mono">No preview available</span>
+    </div>
+  );
+}
+
 /* ================= File Card Component (with 3D tilt) ================= */
 interface FileItem {
   id: string;
@@ -265,7 +398,7 @@ function FileCard({
       >
         <div className="file-thumb flex-1">
           {file.type === "photo" && (
-            <div className="file-thumb-art h-full w-full">{portraitSVG(file.seed)}</div>
+            <FileThumbnail fileId={file.id} type={file.type} name={file.name} seed={file.seed} />
           )}
           {file.type === "video" && (
             <>
@@ -342,23 +475,92 @@ function FileCard({
   );
 }
 
+/* ================= Helpers ================= */
+function formatBytes(bytes: number, decimals = 1) {
+  if (bytes === 0) return "0 Bytes";
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
+}
+
+function mimeToType(mime: string): "photo" | "video" | "pdf" {
+  if (mime.startsWith("image/")) return "photo";
+  if (mime.startsWith("video/")) return "video";
+  if (mime.includes("pdf")) return "pdf";
+  return "pdf"; // fallback for docs
+}
+
+function fileToItem(f: DriveFile, idx: number): FileItem {
+  const type = mimeToType(f.mimeType);
+  const ago = timeAgo(f.createdAt);
+  return {
+    id: f.id,
+    type,
+    seed: Math.abs(hashCode(f.id)) % 100,
+    name: f.name,
+    size: formatBytes(f.sizeBytes),
+    date: ago,
+    ...(type === "video" ? { duration: "00:00" } : {}),
+    ...(type === "pdf" ? { pages: Math.max(1, Math.floor(f.sizeBytes / 50000)) } : {}),
+  };
+}
+
+function hashCode(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  return h;
+}
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  const wks = Math.floor(days / 7);
+  return `${wks}w ago`;
+}
+
 /* ================= Main Gallery Page Component ================= */
 export default function GalleryPage() {
   const [filter, setFilter] = useState("all");
-  const [files, setFiles] = useState<FileItem[]>([
-    { id: "1", type: "photo", seed: 1, name: "Glacier_valley.jpg", size: "6.4 MB", date: "2h ago", span: "row-span-2 md:col-span-2" },
-    { id: "2", type: "video", seed: 2, name: "Studio_reel_master.mp4", size: "340 MB", date: "Today", duration: "01:42" },
-    { id: "3", type: "pdf", seed: 3, name: "Quarterly_report_Q3.pdf", size: "12 MB", date: "1d ago", pages: 24 },
-    { id: "4", type: "photo", seed: 4, name: "Studio_dog_shoot.jpg", size: "5.1 MB", date: "2d ago" },
-    { id: "5", type: "photo", seed: 5, name: "Forest_path_4k.jpg", size: "8.9 MB", date: "3d ago", span: "row-span-2" },
-    { id: "6", type: "pdf", seed: 6, name: "Brand_guidelines_v9.pdf", size: "22 MB", date: "4d ago", pages: 58 },
-    { id: "7", type: "video", seed: 7, name: "Product_teaser_final.mp4", size: "210 MB", date: "5d ago", duration: "00:58", span: "md:col-span-2" },
-    { id: "8", type: "photo", seed: 8, name: "Coastal_drone_still.jpg", size: "7.2 MB", date: "1w ago" },
-    { id: "9", type: "photo", seed: 9, name: "Team_offsite.jpg", size: "4.6 MB", date: "1w ago" },
-    { id: "10", type: "pdf", seed: 10, name: "Client_contract_signed.pdf", size: "3 MB", date: "2w ago", pages: 9 },
-    { id: "11", type: "photo", seed: 11, name: "Mountain_dusk.jpg", size: "6.0 MB", date: "2w ago" },
-    { id: "12", type: "video", seed: 12, name: "Behind_the_scenes.mp4", size: "480 MB", date: "3w ago", duration: "03:12" },
-  ]);
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const ui = useDriveUi();
+
+  // Auth guard
+  const { data: meData, error: meError, isLoading: meLoading } = useQuery({
+    queryKey: ["me"],
+    queryFn: api.me,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (meError) router.push("/login");
+  }, [meError, router]);
+
+  // Fetch all files
+  const { data: searchData } = useQuery({
+    queryKey: ["search", ""],
+    queryFn: () => api.search(""),
+    refetchInterval: 3000,
+  });
+
+  // Fetch storage stats
+  const { data: storageData } = useQuery({
+    queryKey: ["storage"],
+    queryFn: api.storage,
+    refetchInterval: 5000,
+  });
+
+  const files: FileItem[] = (searchData?.results ?? [])
+    .filter((r): r is DriveFile => "mimeType" in r)
+    .map((f, i) => fileToItem(f, i));
 
   const [activeModalFile, setActiveModalFile] = useState<FileItem | null>(null);
 
@@ -559,51 +761,20 @@ export default function GalleryPage() {
     };
   }, []);
 
-  const handleDelete = (id: string) => {
-    setFiles((prev) => prev.filter((f) => f.id !== id));
+  const handleDelete = async (id: string) => {
+    try {
+      await api.deleteFile(id);
+      queryClient.invalidateQueries({ queryKey: ["search"] });
+      queryClient.invalidateQueries({ queryKey: ["storage"] });
+      queryClient.invalidateQueries({ queryKey: ["recent"] });
+    } catch (err) {
+      console.error("Delete failed:", err);
+    }
   };
 
   const handleUpload = (e: React.MouseEvent) => {
     burstConfetti(e.clientX, e.clientY);
-    const id = Date.now().toString();
-    const typeOpts = ["photo", "video", "pdf"];
-    const type = typeOpts[Math.floor(Math.random() * typeOpts.length)];
-    const seed = Math.floor(Math.random() * 100);
-
-    let newFile: FileItem;
-
-    if (type === "photo") {
-      newFile = {
-        id,
-        type,
-        seed,
-        name: `Shot_${seed}.jpg`,
-        size: `${(Math.random() * 8 + 2).toFixed(1)} MB`,
-        date: "Just now",
-      };
-    } else if (type === "video") {
-      newFile = {
-        id,
-        type,
-        seed,
-        name: `Video_${seed}.mp4`,
-        size: `${Math.floor(Math.random() * 400 + 50)} MB`,
-        date: "Just now",
-        duration: `0${Math.floor(Math.random() * 4)}:${Math.floor(Math.random() * 50 + 10)}`,
-      };
-    } else {
-      newFile = {
-        id,
-        type,
-        seed,
-        name: `Document_${seed}.pdf`,
-        size: `${Math.floor(Math.random() * 18 + 2)} MB`,
-        date: "Just now",
-        pages: Math.floor(Math.random() * 50 + 5),
-      };
-    }
-
-    setFiles((prev) => [newFile, ...prev]);
+    ui.openUpload();
   };
 
   const filteredFiles = files.filter((f) => filter === "all" || f.type === filter);
@@ -617,6 +788,17 @@ export default function GalleryPage() {
 
   const pdfCount = files.filter((f) => f.type === "pdf").length;
   const pdfSize = files.filter((f) => f.type === "pdf").reduce((acc, f) => acc + parseFloat(f.size), 0).toFixed(1);
+
+  const storagePercent = storageData?.percentUsed ?? 0;
+  const storageFree = formatBytes(storageData?.freeBytes ?? 0);
+
+  if (meLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#050505] text-white">
+        <div className="font-mono text-sm tracking-widest animate-pulse">LOADING GALLERY...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-[#050505] font-sans selection:bg-neutral-800">
@@ -1156,7 +1338,7 @@ export default function GalleryPage() {
         {/* Upload bar & summary */}
         <div className="reveal mb-12 flex flex-col items-start justify-between gap-6 md:flex-row md:items-end" data-delay="80" data-revealed="true">
           <p className="max-w-md text-sm text-muted-foreground">
-            Every photo, clip, and document — stored, versioned, and rendered like a private screening room. {files.length} items · 482 GB.
+            Every photo, clip, and document — stored, versioned, and rendered like a private screening room. {files.length} items · {formatBytes(storageData?.usedBytes ?? 0)}.
           </p>
           <button className="hover-btn" id="upload-btn" onClick={handleUpload}>
             <span className="dot"></span>
@@ -1282,9 +1464,9 @@ export default function GalleryPage() {
                   </div>
                   <div>
                     <p className="text-2xl font-light tracking-tight" style={{ color: "var(--luxe)" }}>
-                      24%
+                      {storagePercent.toFixed(0)}%
                     </p>
-                    <p className="font-mono text-[10px] text-muted-foreground">1.52 TB free</p>
+                    <p className="font-mono text-[10px] text-muted-foreground">{storageFree} free</p>
                   </div>
                 </div>
               </article>
@@ -1323,7 +1505,16 @@ export default function GalleryPage() {
                 file={f}
                 onView={() => setActiveModalFile(f)}
                 onDelete={() => handleDelete(f.id)}
-                onDownload={(e) => burstConfetti(e.clientX, e.clientY)}
+                onDownload={(e) => {
+                  burstConfetti(e.clientX, e.clientY);
+                  const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+                  const link = document.createElement("a");
+                  link.href = `${API_BASE}/api/files/${f.id}/download`;
+                  link.setAttribute("download", f.name);
+                  document.body.appendChild(link);
+                  link.click();
+                  link.remove();
+                }}
               />
             </div>
           ))}
@@ -1348,18 +1539,7 @@ export default function GalleryPage() {
               </button>
 
               <div className="modal-art h-full w-full">
-                {activeModalFile.type === "photo" && portraitSVG(activeModalFile.seed)}
-                {activeModalFile.type === "video" && (
-                  <div className="w-full h-full relative">
-                    <VideoAnimateCanvas seed={activeModalFile.seed} />
-                  </div>
-                )}
-                {activeModalFile.type === "pdf" && (
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: "var(--luxe)" }}>
-                    <span className="text-6xl">{ICONS.pdf}</span>
-                    <span className="font-mono text-xs text-muted-foreground">{activeModalFile.pages} pages</span>
-                  </div>
-                )}
+                <FileModalViewer file={activeModalFile} />
               </div>
             </div>
 
@@ -1375,7 +1555,19 @@ export default function GalleryPage() {
               </div>
 
               <div className="mt-8 flex flex-col gap-3">
-                <button className="hover-btn justify-center" onClick={(e) => burstConfetti(e.clientX, e.clientY)}>
+                <button
+                  className="hover-btn justify-center"
+                  onClick={(e) => {
+                    burstConfetti(e.clientX, e.clientY);
+                    const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+                    const link = document.createElement("a");
+                    link.href = `${API_BASE}/api/files/${activeModalFile.id}/download`;
+                    link.setAttribute("download", activeModalFile.name);
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                  }}
+                >
                   <span className="dot"></span>
                   <span className="fill"></span>
                   <span>Download</span>

@@ -1,12 +1,128 @@
 "use client";
 
-import { ArrowUpRight, Bell, Cloud, CreditCard, Globe, HardDrive, Mail, Search, Shield, User, Wifi } from "lucide-react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
+import { ArrowUpRight, Bell, Cloud, Globe, HardDrive, Shield, User, Wifi } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import { Reveal } from "@/components/Reveal";
 import { WaveTerrain } from "@/components/WaveTerrain";
 import { Nav } from "@/components/Nav";
 
+function formatBytes(bytes: number, decimals = 1) {
+  if (bytes === 0) return "0 Bytes";
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
+}
+
 export default function SettingsPage() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+
+  const { data: meData, error: meError, isLoading: meLoading } = useQuery({
+    queryKey: ["me"],
+    queryFn: api.me,
+    retry: false,
+  });
+
+  const { data: storageData } = useQuery({
+    queryKey: ["storage"],
+    queryFn: api.storage,
+  });
+
+  const { data: notifData } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: api.getNotifications,
+  });
+
+  const [name, setName] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMsg, setProfileMsg] = useState("");
+
+  const [notifState, setNotifState] = useState({
+    share: true,
+    security: true,
+    email: false,
+  });
+
+  useEffect(() => {
+    if (meError) {
+      router.push("/login");
+    }
+  }, [meError, router]);
+
+  useEffect(() => {
+    if (meData?.user?.name) {
+      setName(meData.user.name);
+    }
+  }, [meData]);
+
+  useEffect(() => {
+    if (notifData?.notifications) {
+      setNotifState((prev) => ({ ...prev, ...notifData.notifications }));
+    }
+  }, [notifData]);
+
+  const user = meData?.user;
+  const initials = user?.name
+    ? user.name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "??";
+
+  async function handleSaveProfile(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingProfile(true);
+    setProfileMsg("");
+    try {
+      await api.updateProfile({ name });
+      await queryClient.invalidateQueries({ queryKey: ["me"] });
+      setProfileMsg("Profile updated successfully");
+    } catch (err) {
+      setProfileMsg(err instanceof Error ? err.message : "Failed to update profile");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  async function handleToggleNotif(key: "share" | "security" | "email", val: boolean) {
+    const updated = { ...notifState, [key]: val };
+    setNotifState(updated);
+    try {
+      await api.updateNotifications({ [key]: val });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    } catch (err) {
+      console.error("Failed to update notifications:", err);
+    }
+  }
+
+  async function handleSignOutEverywhere() {
+    try {
+      await api.deleteAllSessions();
+      router.push("/login");
+    } catch (err) {
+      console.error("Failed to sign out:", err);
+    }
+  }
+
+  if (meLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[oklch(0.05_0_0)] text-white font-mono text-sm tracking-widest animate-pulse">
+        LOADING SETTINGS...
+      </div>
+    );
+  }
+
+  const usedBytes = storageData?.usedBytes ?? 0;
+  const quotaBytes = storageData?.quotaBytes ?? 16106127360;
+  const percentUsed = storageData?.percentUsed ?? Math.round((usedBytes / quotaBytes) * 100);
+
   return (
     <div className="theme-mono relative min-h-screen overflow-x-hidden text-foreground">
       <WaveTerrain />
@@ -31,27 +147,48 @@ export default function SettingsPage() {
               <div className="panel-inner flex flex-col gap-6 p-7">
                 <h2 className="text-xl font-normal tracking-tight">Profile</h2>
                 
-                <div className="flex items-center gap-6">
-                  <div className="relative">
-                    <div className="chrome-pill flex size-24 items-center justify-center rounded-full text-2xl font-semibold">AK</div>
+                <form onSubmit={handleSaveProfile} className="flex items-center gap-6">
+                  <div className="relative shrink-0">
+                    <div className="chrome-pill flex size-24 items-center justify-center rounded-full text-2xl font-semibold">
+                      {initials}
+                    </div>
                   </div>
                   <div className="flex-1">
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div>
                         <label className="block mb-1 text-xs text-muted-foreground">Display Name</label>
-                        <input type="text" defaultValue="Alex Kim" className="w-full rounded-full border border-hairline bg-surface px-4 py-2.5 text-sm outline-none focus:border-primary" />
+                        <input
+                          type="text"
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          className="w-full rounded-full border border-hairline bg-surface px-4 py-2.5 text-sm outline-none focus:border-primary"
+                        />
                       </div>
                       <div>
                         <label className="block mb-1 text-xs text-muted-foreground">Email</label>
-                        <input type="email" defaultValue="alex.k@company.com" className="w-full rounded-full border border-hairline bg-surface px-4 py-2.5 text-sm outline-none focus:border-primary" />
+                        <input
+                          type="email"
+                          value={user?.email ?? ""}
+                          disabled
+                          className="w-full rounded-full border border-hairline bg-surface/50 px-4 py-2.5 text-sm text-muted-foreground outline-none cursor-not-allowed"
+                        />
                       </div>
                     </div>
-                    <button className="mt-4 sheen relative flex h-[44px] items-center gap-2 overflow-hidden rounded-full border border-hairline bg-secondary px-5 text-sm font-medium transition-transform duration-500 hover:-translate-y-0.5">
-                      <ArrowUpRight className="relative z-10 size-4" strokeWidth={1.6} />
-                      <span className="relative z-10">Save Changes</span>
-                    </button>
+                    <div className="flex items-center gap-3 mt-4">
+                      <button
+                        type="submit"
+                        disabled={savingProfile}
+                        className="sheen relative flex h-[44px] items-center gap-2 overflow-hidden rounded-full border border-hairline bg-secondary px-5 text-sm font-medium transition-transform duration-500 hover:-translate-y-0.5 disabled:opacity-50"
+                      >
+                        <ArrowUpRight className="relative z-10 size-4" strokeWidth={1.6} />
+                        <span className="relative z-10">{savingProfile ? "Saving…" : "Save Changes"}</span>
+                      </button>
+                      {profileMsg && (
+                        <span className="font-mono text-xs text-muted-foreground">{profileMsg}</span>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </form>
               </div>
             </article>
           </Reveal>
@@ -66,16 +203,23 @@ export default function SettingsPage() {
                 </div>
                 <div className="relative">
                   <div className="mb-2 flex items-end justify-between">
-                    <span className="font-mono text-4xl font-light">482 GB</span>
-                    <span className="font-mono text-xs text-muted-foreground">of 2 TB</span>
+                    <span className="font-mono text-3xl font-light">{formatBytes(usedBytes)}</span>
+                    <span className="font-mono text-xs text-muted-foreground">of {formatBytes(quotaBytes)}</span>
                   </div>
                   <div className="h-2 rounded-full bg-surface-2 overflow-hidden">
-                    <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: "24%" }} />
+                    <div
+                      className="h-full bg-primary rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(100, percentUsed)}%` }}
+                    />
                   </div>
-                  <p className="mt-2 text-xs text-muted-foreground">24% used</p>
+                  <p className="mt-2 text-xs text-muted-foreground">{percentUsed.toFixed(1)}% used</p>
                 </div>
-                <button className="mt-4 flex w-full items-center justify-between rounded-full border border-hairline bg-surface-2 px-4 py-2.5 transition-colors duration-300 hover:bg-accent">
-                  <span className="text-xs">Upgrade plan</span>
+                <button
+                  type="button"
+                  onClick={() => alert("Free Plan: 15 GB quota active.")}
+                  className="mt-4 flex w-full items-center justify-between rounded-full border border-hairline bg-surface-2 px-4 py-2.5 transition-colors duration-300 hover:bg-accent"
+                >
+                  <span className="text-xs">Current Plan: Free (15 GB)</span>
                   <ArrowUpRight className="size-4" strokeWidth={1.5} />
                 </button>
               </div>
@@ -92,19 +236,19 @@ export default function SettingsPage() {
                 </div>
                 <div className="space-y-3">
                   {[
-                    { label: "File activity", desc: "When files are shared, edited, or commented on", enabled: true },
-                    { label: "Security alerts", desc: "New sign-ins, password changes, 2FA updates", enabled: true },
-                    { label: "Product updates", desc: "New features, maintenance windows, tips", enabled: false },
-                    { label: "Weekly digest", desc: "Summary of your week's activity", enabled: true },
+                    { key: "share" as const, label: "File activity", desc: "When files are shared or modified" },
+                    { key: "security" as const, label: "Security alerts", desc: "New sign-ins and 2FA updates" },
+                    { key: "email" as const, label: "Email notifications", desc: "Product updates and weekly digest" },
                   ].map((notif) => (
-                    <label key={notif.label} className="flex items-center justify-between cursor-pointer">
+                    <label key={notif.key} className="flex items-center justify-between cursor-pointer">
                       <div>
                         <p className="font-mono text-sm">{notif.label}</p>
                         <p className="text-xs text-muted-foreground">{notif.desc}</p>
                       </div>
                       <input
                         type="checkbox"
-                        defaultChecked={notif.enabled}
+                        checked={notifState[notif.key]}
+                        onChange={(e) => handleToggleNotif(notif.key, e.target.checked)}
                         className="size-4 rounded border-hairline bg-surface accent-primary focus:ring-primary"
                       />
                     </label>
@@ -124,7 +268,11 @@ export default function SettingsPage() {
                 </div>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                   {["System", "Light", "Dark"].map((theme) => (
-                    <button key={theme} className="rounded-full border border-hairline bg-surface px-4 py-3 text-sm transition-colors duration-300 hover:bg-surface-2">
+                    <button
+                      key={theme}
+                      type="button"
+                      className="rounded-full border border-hairline bg-surface px-4 py-3 text-sm transition-colors duration-300 hover:bg-surface-2"
+                    >
                       {theme}
                     </button>
                   ))}
@@ -161,12 +309,24 @@ export default function SettingsPage() {
                 </div>
                 <p className="text-sm text-muted-foreground">Irreversible actions. Please proceed with caution.</p>
                 <div className="space-y-3 pt-4 border-t border-hairline">
-                  <button className="flex w-full items-center justify-between rounded-full border border-destructive bg-transparent px-4 py-2.5 text-xs text-destructive transition-colors duration-300 hover:bg-destructive/10">
-                    <span className="flex items-center gap-2"><Wifi className="size-3.5" /> Sign out everywhere</span>
+                  <button
+                    type="button"
+                    onClick={handleSignOutEverywhere}
+                    className="flex w-full items-center justify-between rounded-full border border-destructive bg-transparent px-4 py-2.5 text-xs text-destructive transition-colors duration-300 hover:bg-destructive/10"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Wifi className="size-3.5" /> Sign out everywhere
+                    </span>
                     <ArrowUpRight className="size-3.5" strokeWidth={1.5} />
                   </button>
-                  <button className="flex w-full items-center justify-between rounded-full border border-destructive bg-transparent px-4 py-2.5 text-xs text-destructive transition-colors duration-300 hover:bg-destructive/10">
-                    <span className="flex items-center gap-2"><User className="size-3.5" /> Delete account</span>
+                  <button
+                    type="button"
+                    onClick={() => alert("Please contact support to initiate account deletion.")}
+                    className="flex w-full items-center justify-between rounded-full border border-destructive bg-transparent px-4 py-2.5 text-xs text-destructive transition-colors duration-300 hover:bg-destructive/10"
+                  >
+                    <span className="flex items-center gap-2">
+                      <User className="size-3.5" /> Delete account
+                    </span>
                     <ArrowUpRight className="size-3.5" strokeWidth={1.5} />
                   </button>
                 </div>
@@ -176,7 +336,9 @@ export default function SettingsPage() {
         </div>
 
         <footer className="mt-auto flex flex-col items-center justify-between gap-3 border-t border-hairline py-8 text-xs text-muted-foreground md:flex-row">
-          <span className="flex items-center gap-2"><Cloud className="size-4" strokeWidth={1.4} /> CloudFS</span>
+          <span className="flex items-center gap-2">
+            <Cloud className="size-4" strokeWidth={1.4} /> CloudFS
+          </span>
           <span className="font-mono">All systems nominal · edge sync 12 ms</span>
         </footer>
       </main>

@@ -19,21 +19,24 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import { Reveal } from "@/components/Reveal";
 import { StorageOrb } from "@/components/StorageOrb";
 import { WaveTerrain } from "@/components/WaveTerrain";
 import { Nav } from "@/components/Nav";
 import { useDriveUi } from "@/components/DriveUi";
 
-const navItems = ["Dashboard", "Files", "Shared", "Security", "Settings"];
-
-const files = [
-  { name: "Q3_campaign_master.mp4", type: "Video", size: "4.2 GB", owner: "Alex K.", ago: "2m" },
-  { name: "brand_system_v9.fig", type: "Figma", size: "184 MB", owner: "Mira T.", ago: "18m" },
-  { name: "quarterly_report.pdf", type: "Document", size: "12 MB", owner: "Jonas R.", ago: "1h" },
-  { name: "sensor_dump_0824.parquet", type: "Dataset", size: "902 MB", owner: "Ada P.", ago: "3h" },
-  { name: "keynote_stills/", type: "Folder", size: "1.1 GB", owner: "Alex K.", ago: "yesterday" },
-];
+function formatBytes(bytes: number, decimals = 1) {
+  if (bytes === 0) return "0 Bytes";
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
+}
 
 const pillars = [
   {
@@ -55,6 +58,44 @@ const pillars = [
 
 export default function DashboardPage() {
   const ui = useDriveUi();
+  const router = useRouter();
+
+  const { data: meData, error: meError, isLoading: meLoading } = useQuery({
+    queryKey: ["me"],
+    queryFn: api.me,
+    retry: false,
+  });
+
+  const { data: storageData } = useQuery({
+    queryKey: ["storage"],
+    queryFn: api.storage,
+    refetchInterval: 3000, // Poll storage info
+  });
+
+  const { data: recentData } = useQuery({
+    queryKey: ["recent"],
+    queryFn: api.recent,
+    refetchInterval: 3000, // Poll recent files
+  });
+
+  useEffect(() => {
+    if (meError) {
+      router.push("/login");
+    }
+  }, [meError, router]);
+
+  const user = meData?.user;
+  const storage = storageData;
+  const recentFiles = recentData?.items || [];
+
+  if (meLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[oklch(0.05_0_0)] text-white">
+        <div className="font-mono text-sm tracking-widest animate-pulse">LOADING CONTROL ROOM...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="theme-mono relative min-h-screen overflow-x-hidden bg-[oklch(0.05_0_0)] text-foreground">
       <WaveTerrain />
@@ -74,9 +115,11 @@ export default function DashboardPage() {
                 <span>/</span>
                 <span>Q3 Campaign</span>
               </div>
-              <h1 className="mb-3 text-4xl font-light tracking-tight md:text-6xl">Welcome back, Alex.</h1>
+              <h1 className="mb-3 text-4xl font-light tracking-tight md:text-6xl">
+                Welcome back, {user?.name?.split(" ")[0] || "User"}.
+              </h1>
               <p className="max-w-md text-sm text-muted-foreground">
-                482 GB used of 2 TB — everything synced, mirrored across 3 regions, and encrypted at rest.
+                {formatBytes(storage?.usedBytes ?? 0)} used of {formatBytes(storage?.quotaBytes ?? 16106127360)} — everything synced, mirrored across 3 regions, and encrypted at rest.
               </p>
             </div>
 
@@ -124,9 +167,13 @@ export default function DashboardPage() {
                 <div className="panel-inner p-7">
                   <StorageOrb />
                   <div className="relative flex h-full flex-col justify-between">
-                    <h2 className="w-3/4 text-xl font-normal tracking-tight">Storage Usage — 24%</h2>
+                    <h2 className="w-3/4 text-xl font-normal tracking-tight">
+                      Storage Usage — {storage?.percentUsed?.toFixed(0) ?? "0"}%
+                    </h2>
                     <div className="flex items-end justify-between">
-                      <span className="font-mono text-xs text-muted-foreground">1.52 TB free</span>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {formatBytes(storage?.freeBytes ?? 16106127360)} free
+                      </span>
                       <div className="flex size-8 items-center justify-center rounded-full border border-hairline bg-surface-2">
                         <ChartNoAxesColumn className="size-4" strokeWidth={1.5} />
                       </div>
@@ -282,23 +329,31 @@ export default function DashboardPage() {
           </Reveal>
 
           <div className="overflow-hidden rounded-3xl border border-hairline bg-surface backdrop-blur-xl">
-            {files.map((f, i) => (
-              <Reveal key={f.name} delay={i * 70}>
-                <div className="group grid grid-cols-[1fr_auto] items-center gap-4 border-b border-hairline px-6 py-5 transition-colors duration-300 last:border-b-0 hover:bg-surface-2 md:grid-cols-[2fr_1fr_1fr_1fr_auto]">
-                  <span className="truncate font-mono text-sm">{f.name}</span>
-                  <span className="hidden text-xs text-muted-foreground md:block">{f.type}</span>
-                  <span className="hidden text-xs text-muted-foreground md:block">{f.size}</span>
-                  <span className="hidden text-xs text-muted-foreground md:block">{f.owner}</span>
-                  <span className="flex items-center gap-3 text-xs text-muted-foreground">
-                    {f.ago}
-                    <ArrowUpRight
-                      className="size-4 -translate-x-1 opacity-0 transition-all duration-500 group-hover:translate-x-0 group-hover:opacity-100"
-                      strokeWidth={1.5}
-                    />
-                  </span>
-                </div>
-              </Reveal>
-            ))}
+            {recentFiles.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                <Cloud className="size-8 mb-3 opacity-30 animate-pulse" />
+                <p className="text-sm font-mono">No recent files</p>
+                <p className="text-xs">Drag and drop or click upload to start</p>
+              </div>
+            ) : (
+              recentFiles.map((f, i) => (
+                <Reveal key={f.id} delay={i * 70}>
+                  <div className="group grid grid-cols-[1fr_auto] items-center gap-4 border-b border-hairline px-6 py-5 transition-colors duration-300 last:border-b-0 hover:bg-surface-2 md:grid-cols-[2fr_1fr_1fr_1fr_auto]">
+                    <span className="truncate font-mono text-sm">{f.name}</span>
+                    <span className="hidden text-xs text-muted-foreground md:block">{f.mimeType}</span>
+                    <span className="hidden text-xs text-muted-foreground md:block">{formatBytes(f.sizeBytes)}</span>
+                    <span className="hidden text-xs text-muted-foreground md:block">Me</span>
+                    <span className="flex items-center gap-3 text-xs text-muted-foreground">
+                      {new Date(f.createdAt).toLocaleDateString()}
+                      <ArrowUpRight
+                        className="size-4 -translate-x-1 opacity-0 transition-all duration-500 group-hover:translate-x-0 group-hover:opacity-100"
+                        strokeWidth={1.5}
+                      />
+                    </span>
+                  </div>
+                </Reveal>
+              ))
+            )}
           </div>
         </section>
 
