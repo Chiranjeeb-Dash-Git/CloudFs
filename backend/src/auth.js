@@ -9,22 +9,69 @@ export function signAccess(user) {
   return jwt.sign({ sub: user.id, email: user.email }, accessSecret(), { expiresIn: "15m" });
 }
 
-export function signRefresh(user) {
-  const token = jwt.sign({ sub: user.id, typ: "refresh" }, refreshSecret(), { expiresIn: "14d" });
-  mem.refresh.set(token, user.id);
+export function signRefresh(user, jti) {
+  const token = jwt.sign(
+    { sub: user.id, typ: "refresh", jti: jti || mem.id() },
+    refreshSecret(),
+    { expiresIn: "14d" },
+  );
+  mem.refresh.set(token, { userId: user.id, jti: jti || token });
   return token;
 }
 
-export function setAuthCookies(res, user) {
+export function setAuthCookies(res, user, meta = {}) {
   const isProd = process.env.NODE_ENV === "production";
   const common = { httpOnly: true, sameSite: "lax", secure: isProd, path: "/" };
   res.cookie("access_token", signAccess(user), { ...common, maxAge: 15 * 60 * 1000 });
-  res.cookie("refresh_token", signRefresh(user), { ...common, maxAge: 14 * 24 * 60 * 60 * 1000 });
+  const refresh = signRefresh(user, meta.refreshJti);
+  res.cookie("refresh_token", refresh, { ...common, maxAge: 14 * 24 * 60 * 60 * 1000 });
+  return refresh;
 }
 
 export function clearAuthCookies(res) {
   res.clearCookie("access_token", { path: "/" });
   res.clearCookie("refresh_token", { path: "/" });
+}
+
+export function recordSession(userId, req, jti) {
+  const ua = req.headers["user-agent"] || "Unknown device";
+  const device = parseDevice(ua);
+  const session = {
+    id: jti || mem.id(),
+    userId,
+    device: device.label,
+    os: device.os,
+    browser: device.browser,
+    ip: req.ip || req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "",
+    userAgent: ua,
+    lastActiveAt: mem.now(),
+    createdAt: mem.now(),
+    revokedAt: null,
+  };
+  mem.sessions.push(session);
+  // Cap to last 20 sessions per user
+  const mine = mem.sessions.filter((s) => s.userId === userId && !s.revokedAt);
+  if (mine.length > 20) {
+    const overflow = mine.slice(0, mine.length - 20);
+    for (const s of overflow) s.revokedAt = mem.now();
+  }
+  return session;
+}
+
+function parseDevice(ua) {
+  const lc = String(ua).toLowerCase();
+  let os = "Unknown";
+  if (lc.includes("windows")) os = "Windows";
+  else if (lc.includes("mac")) os = "macOS";
+  else if (lc.includes("android")) os = "Android";
+  else if (lc.includes("iphone") || lc.includes("ipad")) os = "iOS";
+  else if (lc.includes("linux")) os = "Linux";
+  let browser = "Browser";
+  if (lc.includes("edg/")) browser = "Edge";
+  else if (lc.includes("chrome/")) browser = "Chrome";
+  else if (lc.includes("firefox/")) browser = "Firefox";
+  else if (lc.includes("safari/") && !lc.includes("chrome")) browser = "Safari";
+  return { label: `${browser} on ${os}`, os, browser };
 }
 
 export function requireAuth(req, _res, next) {
@@ -35,6 +82,9 @@ export function requireAuth(req, _res, next) {
     const user = mem.users.find((u) => u.id === payload.sub);
     if (!user) throw fail(401, "UNAUTHENTICATED", "Session user missing");
     req.user = { id: user.id, email: user.email, name: user.name, imageUrl: user.imageUrl };
+    // Touch session activity if any
+    const sess = mem.sessions.find((s) => s.userId === user.id && !s.revokedAt);
+    if (sess) sess.lastActiveAt = mem.now();
     next();
   } catch (err) {
     if (err.status) return next(err);
@@ -43,5 +93,13 @@ export function requireAuth(req, _res, next) {
 }
 
 export function publicUser(user) {
-  return { id: user.id, email: user.email, name: user.name, imageUrl: user.imageUrl ?? null, createdAt: user.createdAt };
+  if (!user) return null;
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    imageUrl: user.imageUrl ?? null,
+    twoFactorEnabled: !!user.twoFactorEnabled,
+    createdAt: user.createdAt,
+  };
 }

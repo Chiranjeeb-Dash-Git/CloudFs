@@ -8,6 +8,12 @@ import { foldersRouter } from "./routes/folders.js";
 import { filesRouter } from "./routes/files.js";
 import { sharesRouter } from "./routes/shares.js";
 import { searchRouter } from "./routes/search.js";
+import { meRouter } from "./routes/me.js";
+import { sessionsRouter } from "./routes/sessions.js";
+import { activitiesRouter } from "./routes/activities.js";
+import { settingsRouter } from "./routes/settings.js";
+import { notificationsRouter } from "./routes/notifications.js";
+import { usersRouter } from "./routes/users.js";
 import { sendError } from "./util.js";
 
 export function createApp() {
@@ -38,10 +44,26 @@ export function createApp() {
     }),
   );
 
-  app.get("/health", (_req, res) => res.json({ ok: true, service: "cloudfs-api" }));
+  app.get("/health", (_req, res) =>
+    res.json({ ok: true, service: "cloudfs-api", version: "1.1.0" }),
+  );
+
+  // Auth (register/login/logout/refresh/me/google/change-password)
   app.use("/api/auth", authRouter);
+
+  // Resource routers
   app.use("/api/folders", foldersRouter);
   app.use("/api/files", filesRouter);
+
+  // User-facing feature routers
+  app.use("/api/me", meRouter);
+  app.use("/api/sessions", sessionsRouter);
+  app.use("/api/activities", activitiesRouter);
+  app.use("/api/settings", settingsRouter);
+  app.use("/api/notifications", notificationsRouter);
+  app.use("/api/users", usersRouter);
+
+  // Mounted at /api: shares (user + link), search, stars, trash
   app.use("/api", sharesRouter);
   app.use("/api", searchRouter);
 
