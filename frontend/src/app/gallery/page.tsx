@@ -314,6 +314,14 @@ function FileModalViewer({ file }: { file: FileItem }) {
     setPan({ x: 0, y: 0 });
   };
 
+  const handleZoomIn = () => {
+    zoomBy(1.25);
+  };
+
+  const handleZoomOut = () => {
+    zoomBy(1 / 1.25);
+  };
+
   // Scroll wheel zoom
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
