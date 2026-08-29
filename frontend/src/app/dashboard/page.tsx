@@ -19,13 +19,14 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Reveal } from "@/components/Reveal";
-import { StorageOrb } from "@/components/StorageOrb";
-import { WaveTerrain } from "@/components/WaveTerrain";
+const StorageOrb = dynamic(() => import("@/components/StorageOrb"), { ssr: false });
+const WaveTerrain = dynamic(() => import("@/components/WaveTerrain"), { ssr: false });
 import { Nav } from "@/components/Nav";
 import { useDriveUi } from "@/components/DriveUi";
 
@@ -69,13 +70,13 @@ export default function DashboardPage() {
   const { data: storageData } = useQuery({
     queryKey: ["storage"],
     queryFn: api.storage,
-    refetchInterval: 3000, // Poll storage info
+    refetchInterval: 30_000,
   });
 
   const { data: recentData } = useQuery({
     queryKey: ["recent"],
     queryFn: api.recent,
-    refetchInterval: 3000, // Poll recent files
+    refetchInterval: 15_000,
   });
 
   useEffect(() => {

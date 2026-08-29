@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { NimbusDisk } from "@/components/NimbusDisk";
+import dynamic from "next/dynamic";
+const NimbusDisk = dynamic(() => import("@/components/NimbusDisk"), { ssr: false });
 import { RevealText } from "@/components/RevealText";
 import { StartFreeButton } from "@/components/StartFreeButton";
 
@@ -43,18 +44,9 @@ export default function LandingPage() {
           </Link>
 
           <div className="hidden items-center gap-10 rounded-full border border-white/5 bg-white/[0.02] px-8 py-2.5 text-sm font-medium text-white/60 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] backdrop-blur-md md:flex">
-            <a href="#platform" className="relative text-white after:absolute after:left-0 after:-bottom-1.5 after:h-[1px] after:w-full after:bg-white/80 after:content-['']">
-              Platform
-            </a>
             <Link href="/files" className="transition-colors hover:text-white">
               Storage
             </Link>
-            <Link href="/security" className="transition-colors hover:text-white">
-              Security
-            </Link>
-            <a href="#platform" className="transition-colors hover:text-white">
-              Pricing
-            </a>
           </div>
 
           <div className="hidden md:block">
@@ -75,9 +67,7 @@ export default function LandingPage() {
 
         {menu ? (
           <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/70 md:hidden">
-            <Link href="/dashboard">Platform</Link>
             <Link href="/files">Storage</Link>
-            <Link href="/security">Security</Link>
             <Link href="/login">Access Console</Link>
           </div>
         ) : null}
@@ -93,9 +83,6 @@ export default function LandingPage() {
             </p>
             <div className="flex flex-wrap items-center gap-4 pt-2">
               <StartFreeButton />
-              <Link href="/dashboard" className="nimbus-ghost inline-flex h-[60px] items-center overflow-hidden rounded-full px-5 py-3 text-sm font-medium text-white/80 hover:text-white">
-                View Architecture
-              </Link>
             </div>
           </div>
         </div>

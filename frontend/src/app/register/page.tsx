@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ArrowLeft } from "lucide-react";
 import { api } from "@/lib/api";
 import { WaveTerrain } from "@/components/WaveTerrain";
 
@@ -16,6 +17,13 @@ export default function RegisterPage() {
   return (
     <div className="theme-mono relative min-h-screen text-foreground">
       <WaveTerrain />
+      <Link
+        href="/"
+        className="absolute left-6 top-6 z-20 flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft size={16} />
+        <span>Back</span>
+      </Link>
       <main className="relative z-10 mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
         <p className="mb-3 font-mono text-[11px] tracking-widest text-muted-foreground uppercase">CloudFS</p>
         <h1 className="mb-8 text-4xl font-light tracking-tight">Create account</h1>

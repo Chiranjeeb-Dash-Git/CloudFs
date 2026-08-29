@@ -96,10 +96,17 @@ export function WaveTerrain() {
     const clock = new THREE.Clock();
     let raf = 0;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let lastFrame = 0;
 
     const tick = () => {
       raf = requestAnimationFrame(tick);
-      const t = reduced ? 0 : clock.getElapsedTime();
+
+      // Cap at ~30 FPS to halve CPU usage
+      const elapsed = clock.getElapsedTime();
+      if (elapsed - lastFrame < 0.033) return;
+      lastFrame = elapsed;
+
+      const t = reduced ? 0 : elapsed;
       const scroll = window.scrollY * 0.004;
 
       for (let n = 0; n < count; n++) {

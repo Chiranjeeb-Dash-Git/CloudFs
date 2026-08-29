@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
+import dynamic from "next/dynamic";
 import { ArrowUpRight, Clock, Cloud, RefreshCw, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Reveal } from "@/components/Reveal";
-import { WaveTerrain } from "@/components/WaveTerrain";
+const WaveTerrain = dynamic(() => import("@/components/WaveTerrain"), { ssr: false });
 import { Nav } from "@/components/Nav";
 
 function formatBytes(bytes: number, decimals = 1) {
@@ -35,7 +36,7 @@ export default function TrashPage() {
   const { data: trashData } = useQuery({
     queryKey: ["trash"],
     queryFn: api.trash,
-    refetchInterval: 3000,
+    refetchInterval: 30_000,
   });
 
   const items = trashData?.items ?? [];

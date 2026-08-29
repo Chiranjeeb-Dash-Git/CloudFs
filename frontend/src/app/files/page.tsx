@@ -1,16 +1,15 @@
 "use client";
 
 import { useEffect } from "react";
+import dynamic from "next/dynamic";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { EmberParticles } from "@/components/EmberParticles";
+const EmberParticles = dynamic(() => import("@/components/EmberParticles"), { ssr: false });
 import { Nav } from "@/components/Nav";
 import { useDriveUi } from "@/components/DriveUi";
-
-gsap.registerPlugin(ScrollTrigger);
 
 function formatBytes(bytes: number, decimals = 1) {
   if (bytes === 0) return "0 Bytes";
@@ -38,24 +37,26 @@ export default function FilesPage() {
   const { data: storageData } = useQuery({
     queryKey: ["storage"],
     queryFn: api.storage,
-    refetchInterval: 5000,
+    refetchInterval: 30_000,
   });
 
   const { data: recentData } = useQuery({
     queryKey: ["recent"],
     queryFn: api.recent,
-    refetchInterval: 3000,
+    refetchInterval: 15_000,
   });
 
   const { data: searchData } = useQuery({
     queryKey: ["search", ""],
     queryFn: () => api.search(""),
-    refetchInterval: 5000,
+    refetchInterval: 30_000,
   });
 
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (prefersReducedMotion) return;
+
+    gsap.registerPlugin(ScrollTrigger);
 
     const ctx = gsap.context(() => {
       (gsap.utils.toArray(".studio-card") as Element[]).forEach((card: Element, i: number) => {
