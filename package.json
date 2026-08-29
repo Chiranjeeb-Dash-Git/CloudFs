@@ -1,0 +1,8 @@
+{
+  "name": "cloudfs-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "start cmd /c \"npm run dev --prefix backend\" & start cmd /c \"npm run dev --prefix frontend\""
+  }
+}
