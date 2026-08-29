@@ -15,6 +15,7 @@ meRouter.get("/", (req, res) => {
 meRouter.get("/storage", (req, res) => {
   const used = mem.storageUsed(req.user.id);
   const quota = mem.quotaFor(req.user.id);
+  const settings = mem.getOrCreateSettings(req.user.id);
   const fileCount = mem.files.filter((f) => f.ownerId === req.user.id && !f.isDeleted).length;
   const folderCount = mem.folders.filter((f) => f.ownerId === req.user.id && !f.isDeleted).length;
   const sharedCount =
@@ -28,6 +29,7 @@ meRouter.get("/storage", (req, res) => {
     fileCount,
     folderCount,
     sharedCount,
+    plan: settings.plan || "free",
   });
 });
 

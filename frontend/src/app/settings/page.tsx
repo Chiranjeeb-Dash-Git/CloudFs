@@ -122,6 +122,7 @@ export default function SettingsPage() {
   const usedBytes = storageData?.usedBytes ?? 0;
   const quotaBytes = storageData?.quotaBytes ?? 16106127360;
   const percentUsed = storageData?.percentUsed ?? Math.round((usedBytes / quotaBytes) * 100);
+  const plan = storageData?.plan ?? "free";
 
   return (
     <div className="theme-mono relative min-h-screen overflow-x-hidden text-foreground">
@@ -216,10 +217,10 @@ export default function SettingsPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => alert("Free Plan: 15 GB quota active.")}
+                  onClick={() => alert(`${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan: ${formatBytes(quotaBytes)} quota active.`)}
                   className="mt-4 flex w-full items-center justify-between rounded-full border border-hairline bg-surface-2 px-4 py-2.5 transition-colors duration-300 hover:bg-accent"
                 >
-                  <span className="text-xs">Current Plan: Free (15 GB)</span>
+                  <span className="text-xs">Current Plan: {plan.charAt(0).toUpperCase() + plan.slice(1)} ({formatBytes(quotaBytes)})</span>
                   <ArrowUpRight className="size-4" strokeWidth={1.5} />
                 </button>
               </div>

@@ -59,6 +59,7 @@ export const api = {
       fileCount: number;
       folderCount: number;
       sharedCount: number;
+      plan: string;
     }>("/api/me/storage"),
   recent: () => request<{ items: DriveFile[] }>("/api/files/recent"),
   deleteFile: (id: string) => request<any>(`/api/files/${id}`, { method: "DELETE" }),
