@@ -10,6 +10,13 @@ import { useDriveUi } from "@/components/DriveUi";
 
 /* ================= Custom SVG Icons matching the HTML style ================= */
 const ICONS = {
+  audio: (
+    <svg viewBox="0 0 24 24" className="w-[1.2em] h-[1.2em]" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 18V5l12-2v13" />
+      <circle cx="6" cy="18" r="3" />
+      <circle cx="18" cy="16" r="3" />
+    </svg>
+  ),
   cloud: (
     <svg viewBox="0 0 24 24" className="w-[1.2em] h-[1.2em]" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M6.5 18a4 4 0 0 1-.4-7.98A5.5 5.5 0 0 1 16.8 8.2a4.5 4.5 0 0 1-.8 8.9" />
@@ -184,6 +191,8 @@ function burstConfetti(x: number, y: number) {
 /* ================= Live File Thumbnail component ================= */
 function FileThumbnail({ fileId, type, name, seed }: { fileId: string; type: string; name: string; seed: number }) {
   const [src, setSrc] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
   useEffect(() => {
     if (type !== "photo") return;
@@ -193,7 +202,6 @@ function FileThumbnail({ fileId, type, name, seed }: { fileId: string; type: str
 
     async function load() {
       try {
-        const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
         const res = await fetch(`${API_BASE}/api/files/${fileId}/thumbnail`, {
           credentials: "include",
         });
@@ -204,7 +212,7 @@ function FileThumbnail({ fileId, type, name, seed }: { fileId: string; type: str
           setSrc(objectUrl);
         }
       } catch (err) {
-        // Fallback handled by return condition
+        // Fallback
       }
     }
 
@@ -216,10 +224,61 @@ function FileThumbnail({ fileId, type, name, seed }: { fileId: string; type: str
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [fileId, type]);
+  }, [fileId, type, API_BASE]);
 
   if (type === "photo" && src) {
     return <img src={src} alt={name} className="w-full h-full object-cover block" />;
+  }
+
+  if (type === "video") {
+    const downloadUrl = `${API_BASE}/api/files/${fileId}/download`;
+    return (
+      <div 
+        className="w-full h-full relative"
+        onMouseEnter={() => videoRef.current?.play().catch(() => {})}
+        onMouseLeave={() => {
+          if (videoRef.current) {
+            videoRef.current.pause();
+            videoRef.current.currentTime = 0;
+          }
+        }}
+      >
+        <video 
+          ref={videoRef}
+          src={downloadUrl}
+          preload="metadata"
+          muted
+          loop
+          playsInline
+          className="w-full h-full object-cover block"
+        />
+      </div>
+    );
+  }
+
+  if (type === "pdf") {
+    const downloadUrl = `${API_BASE}/api/files/${fileId}/download?inline=true`;
+    return (
+      <div className="w-full h-full overflow-hidden bg-white relative pointer-events-none select-none">
+        <iframe 
+          src={`${downloadUrl}#toolbar=0&navpanes=0&scrollbar=0`} 
+          className="w-[200%] h-[200%] border-0 absolute top-0 left-0 origin-top-left scale-[0.5]" 
+        />
+      </div>
+    );
+  }
+
+  if (type === "audio") {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-zinc-950 to-black relative overflow-hidden group/audio">
+        <div className="w-16 h-16 rounded-full bg-zinc-950 border-2 border-zinc-800 flex items-center justify-center relative shadow-lg transition-transform duration-700 group-hover/audio:rotate-[360deg]">
+          <div className="w-6 h-6 rounded-full bg-black flex items-center justify-center">
+            <div className="w-1.5 h-1.5 rounded-full bg-zinc-400"></div>
+          </div>
+        </div>
+        <span className="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">{name.split('.').pop() || 'AUDIO'}</span>
+      </div>
+    );
   }
 
   // Fallback to portrait SVG for non-images or on error
@@ -491,7 +550,7 @@ function FileModalViewer({ file }: { file: FileItem }) {
           )}
 
           {file.type === "pdf" && (
-            <div className="relative iframe-container" style={{ width: "80vw", height: "76vh", maxWidth: "850px" }}>
+            <div className="relative iframe-container" style={{ width: "min(850px, 90vw)", height: "80vh", boxShadow: "0 25px 70px rgba(0, 0, 0, 0.85)", borderRadius: "8px", overflow: "hidden", background: "#525659" }}>
               {/* Overlay blocker to capture dragging events when mouse moves over the iframe */}
               {isDragging && <div className="absolute inset-0 z-20 cursor-grabbing bg-transparent" />}
               <iframe 
@@ -513,6 +572,27 @@ function FileModalViewer({ file }: { file: FileItem }) {
               >
                 Your browser does not support the video tag.
               </video>
+            </div>
+          )}
+
+          {file.type === "audio" && (
+            <div className="relative flex flex-col items-center justify-center p-8 bg-zinc-950/80 border border-zinc-800 rounded-3xl backdrop-blur-md shadow-2xl" style={{ width: "min(440px, 90vw)" }}>
+              {/* Spinning Record Graphic */}
+              <div className="w-36 h-36 rounded-full bg-gradient-to-tr from-zinc-800 via-zinc-900 to-black border-4 border-zinc-700 flex items-center justify-center relative shadow-2xl mb-8 animate-[spin_10s_linear_infinite]">
+                <div className="w-14 h-14 rounded-full bg-black border-2 border-zinc-800 flex items-center justify-center">
+                  <div className="w-3 h-3 rounded-full bg-[#c9b98a]"></div>
+                </div>
+              </div>
+              
+              <h4 className="text-sm font-medium text-white mb-1 text-center truncate w-full">{file.name}</h4>
+              <p className="text-xs text-zinc-500 mb-6">{file.size}</p>
+
+              <audio 
+                src={url} 
+                controls 
+                autoPlay 
+                className="w-full h-10 accent-[#c9b98a]"
+              />
             </div>
           )}
         </div>
@@ -660,36 +740,19 @@ function FileCard({
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
       >
-        <div className="file-thumb flex-1">
-          {file.type === "photo" && (
-            <FileThumbnail fileId={file.id} type={file.type} name={file.name} seed={file.seed} />
-          )}
+        <div className="file-thumb flex-1 relative overflow-hidden">
+          <FileThumbnail fileId={file.id} type={file.type} name={file.name} seed={file.seed} />
+          
           {file.type === "video" && (
-            <>
-              <div className="video-plate-slot h-full w-full">
-                <canvas ref={videoCanvasRef} width={320} height={240} className="w-full h-full block" />
+            <div className="play-badge pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="circle w-10 h-10 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center border border-white/20">
+                {ICONS.play}
               </div>
-              <div className="play-badge">
-                <div className="circle">{ICONS.play}</div>
-              </div>
-              <span className="badge" style={{ left: "auto", right: "10px" }}>
-                {file.duration}
-              </span>
-            </>
-          )}
-          {file.type === "pdf" && (
-            <div
-              className="flex h-full w-full flex-col items-center justify-center gap-2"
-              style={{
-                background: "radial-gradient(circle at 50% 30%, oklch(1 0 0 / 6%), transparent 60%), var(--gradient-panel)",
-              }}
-            >
-              <span style={{ color: "var(--luxe)", fontSize: "2.2rem" }}>{ICONS.pdf}</span>
-              <span className="font-mono text-[10px] text-muted-foreground">{file.pages} pages</span>
             </div>
           )}
+          
           <span className="badge">
-            {ICONS[file.type as keyof typeof ICONS]} {file.type.toUpperCase()}
+            {ICONS[file.type as keyof typeof ICONS] || ICONS.pdf} {(file.type || "file").toUpperCase()}
           </span>
           <div className="scrim"></div>
           <div className="dock">
@@ -749,9 +812,10 @@ function formatBytes(bytes: number, decimals = 1) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
 }
 
-function mimeToType(mime: string): "photo" | "video" | "pdf" {
+function mimeToType(mime: string): "photo" | "video" | "pdf" | "audio" {
   if (mime.startsWith("image/")) return "photo";
   if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("audio/")) return "audio";
   if (mime.includes("pdf")) return "pdf";
   return "pdf"; // fallback for docs
 }
