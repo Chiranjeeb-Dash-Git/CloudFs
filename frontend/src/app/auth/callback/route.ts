@@ -23,19 +23,48 @@ export async function GET(request: Request) {
                 cookieStore.set(name, value, options)
               );
             } catch {
-              // The `set` method was called from a Server Component.
-              // This can be ignored if you have middleware refreshing user sessions.
+              // Ignored in Server Components
             }
           },
         },
       }
     );
+
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      // Get the authenticated Supabase user
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (user) {
+        // Bridge to the Express backend: call /api/auth/google to create
+        // a backend session with proper cookies
+        const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+        const backendRes = await fetch(`${apiBase}/api/auth/google`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: user.email,
+            name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split("@")[0] || "User",
+            imageUrl: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
+            googleSub: user.user_metadata?.sub || user.id,
+          }),
+        });
+
+        if (backendRes.ok) {
+          // Forward the backend session cookies to the browser
+          const response = NextResponse.redirect(`${origin}${next}`);
+          const setCookies = backendRes.headers.getSetCookie();
+          for (const cookie of setCookies) {
+            response.headers.append("Set-Cookie", cookie);
+          }
+          return response;
+        }
+      }
+
+      // Supabase auth succeeded but backend bridge failed — still redirect
       return NextResponse.redirect(`${origin}${next}`);
     }
   }
 
-  // return the user to an error page or login page with instructions
   return NextResponse.redirect(`${origin}/login?error=auth-callback-failed`);
 }
