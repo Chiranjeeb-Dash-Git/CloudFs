@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const now = () => new Date().toISOString();
-const DEFAULT_QUOTA_BYTES = 15 * 1024 * 1024 * 1024; // 15 GB
+const DEFAULT_QUOTA_BYTES = Number(process.env.DEFAULT_QUOTA_BYTES || 107374182400); // 100 GB default
 
 // Convert camelCase keys to snake_case for PostgreSQL columns
 function camelToSnake(str) {
@@ -307,6 +307,9 @@ if (process.env.DATABASE_URL) {
           created_at TIMESTAMPTZ DEFAULT NOW()
         )
       `);
+
+      // Upgrade existing users' default quota from 15 GB to 100 GB
+      await pool.query("UPDATE users SET quota_bytes = 107374182400 WHERE quota_bytes = 16106127360");
 
       // 3. Load records from DB into local cache
       const tables = [

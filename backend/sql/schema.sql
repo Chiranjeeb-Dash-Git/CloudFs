@@ -14,7 +14,7 @@ create table if not exists users (
   two_factor_enabled boolean default false,
   two_factor_secret text,
   providers jsonb default '{}'::jsonb,
-  quota_bytes bigint default 16106127360,
+  quota_bytes bigint default 107374182400,
   created_at timestamptz default now()
 );
 
