@@ -6,6 +6,7 @@ import { useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { api } from "@/lib/api";
 import { WaveTerrain } from "@/components/WaveTerrain";
+import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -60,6 +61,12 @@ export default function LoginPage() {
             Continue
           </button>
         </form>
+        <div className="my-4 flex items-center gap-3">
+          <div className="h-px flex-1 bg-hairline" />
+          <span className="text-xs text-muted-foreground">or</span>
+          <div className="h-px flex-1 bg-hairline" />
+        </div>
+        <GoogleSignInButton />
         <p className="mt-6 text-sm text-muted-foreground">
           No account?{" "}
           <Link href="/register" className="text-foreground">
