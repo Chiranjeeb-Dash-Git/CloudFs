@@ -84,6 +84,8 @@ filesRouter.post("/init", requireAuth, (req, res, next) => {
   }
 });
 
+const tempUploads = new Map();
+
 filesRouter.put("/:id/bytes", requireAuth, async (req, res, next) => {
   try {
     assertWrite(req.user.id, "file", req.params.id);
@@ -92,17 +94,10 @@ filesRouter.put("/:id/bytes", requireAuth, async (req, res, next) => {
     file.sizeBytes = buf.length;
     const etag = `"${crypto.createHash("md5").update(buf).digest("hex")}"`;
 
-    // Save file binary data directly to database
-    const version = mem.versions.find((v) => v.fileId === file.id);
-    if (version) {
-      version.sizeBytes = buf.length;
-      version.fileData = buf;
-    }
+    // Cache the upload buffer in memory temporarily
+    tempUploads.set(file.id, buf);
+
     if (pool) {
-      await pool.query(
-        "UPDATE file_versions SET file_data = $1, size_bytes = $2 WHERE file_id = $3",
-        [buf, buf.length, file.id]
-      );
       await pool.query("UPDATE files SET size_bytes = $1 WHERE id = $2", [buf.length, file.id]);
     }
 
@@ -113,7 +108,7 @@ filesRouter.put("/:id/bytes", requireAuth, async (req, res, next) => {
   }
 });
 
-filesRouter.post("/complete", requireAuth, (req, res, next) => {
+filesRouter.post("/complete", requireAuth, async (req, res, next) => {
   try {
     const body = completeSchema.parse(req.body);
     assertWrite(req.user.id, "file", body.fileId);
@@ -173,6 +168,20 @@ filesRouter.post("/complete", requireAuth, (req, res, next) => {
         file.versionId = version.id;
       }
     }
+
+    // Transfer cached upload buffer to the newly created version
+    const buf = tempUploads.get(file.id);
+    if (buf) {
+      const activeVersion = mem.versions.find((v) => v.id === file.versionId);
+      if (activeVersion) {
+        activeVersion.fileData = buf;
+        if (pool) {
+          await pool.query("UPDATE file_versions SET file_data = $1 WHERE id = $2", [buf, activeVersion.id]);
+        }
+      }
+      tempUploads.delete(file.id);
+    }
+
     logActivity(req.user.id, "upload", "file", file.id, { name: file.name, sizeBytes: file.sizeBytes });
     res.json({ file: camelFile(file) });
   } catch (err) {

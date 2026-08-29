@@ -232,6 +232,17 @@ function FileModalViewer({ file }: { file: FileItem }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Pan & Zoom Stage States
+  const [scale, setScale] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+  const panStart = useRef({ x: 0, y: 0 });
+  const stageRef = useRef<HTMLDivElement>(null);
+
+  const minScale = 0.4;
+  const maxScale = 6.0;
+
   useEffect(() => {
     let active = true;
     let objectUrl: string | null = null;
@@ -278,9 +289,68 @@ function FileModalViewer({ file }: { file: FileItem }) {
     };
   }, [file.id, file.type]);
 
+  // Handle zooming using buttons or shortcuts
+  const zoomBy = (factor: number, cx?: number, cy?: number) => {
+    if (!stageRef.current) return;
+    const rect = stageRef.current.getBoundingClientRect();
+    const centerX = cx ?? rect.width / 2;
+    const centerY = cy ?? rect.height / 2;
+    
+    setScale((prevScale) => {
+      const newScale = Math.min(maxScale, Math.max(minScale, prevScale * factor));
+      // Anchor zoom position to point under cursor
+      const relativeX = centerX - rect.width / 2;
+      const relativeY = centerY - rect.height / 2;
+      const dx = (relativeX - pan.x) * (newScale / prevScale - 1);
+      const dy = (relativeY - pan.y) * (newScale / prevScale - 1);
+      
+      setPan((prevPan) => ({ x: prevPan.x - dx, y: prevPan.y - dy }));
+      return newScale;
+    });
+  };
+
+  const resetView = () => {
+    setScale(1);
+    setPan({ x: 0, y: 0 });
+  };
+
+  // Scroll wheel zoom
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    if (!stageRef.current) return;
+    const rect = stageRef.current.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    zoomBy(e.deltaY < 0 ? 1.15 : 1 / 1.15, cx, cy);
+  };
+
+  // Drag to pan handlers
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return; // Left click only
+    setIsDragging(true);
+    dragStart.current = { x: e.clientX, y: e.clientY };
+    panStart.current = { ...pan };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDragging) return;
+    const dx = e.clientX - dragStart.current.x;
+    const dy = e.clientY - dragStart.current.y;
+    setPan({
+      x: panStart.current.x + dx,
+      y: panStart.current.y + dy,
+    });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    setIsDragging(false);
+    e.currentTarget.releasePointerCapture(e.pointerId);
+  };
+
   if (loading) {
     return (
-      <div className="flex h-full w-full items-center justify-center font-mono text-xs text-muted-foreground animate-pulse">
+      <div className="flex h-full w-full items-center justify-center font-mono text-xs text-muted-foreground animate-pulse bg-black/20">
         LOADING CONTENT...
       </div>
     );
@@ -288,7 +358,7 @@ function FileModalViewer({ file }: { file: FileItem }) {
 
   if (error) {
     return (
-      <div className="flex h-full w-full items-center justify-center font-mono text-xs text-red-500">
+      <div className="flex h-full w-full items-center justify-center font-mono text-xs text-red-500 bg-black/20">
         ERROR: {error}
       </div>
     );
@@ -297,18 +367,191 @@ function FileModalViewer({ file }: { file: FileItem }) {
   if (!url) return null;
 
   return (
-    <div className="w-full h-full flex items-center justify-center overflow-hidden bg-black/40">
-      {file.type === "photo" && (
-        <img src={url} alt={file.name} className="max-w-full max-h-full object-contain block select-none" />
-      )}
-      {file.type === "video" && (
-        <video src={url} controls autoPlay className="max-w-full max-h-full object-contain block">
-          Your browser does not support the video tag.
-        </video>
-      )}
-      {file.type === "pdf" && (
-        <iframe src={url} className="w-full h-full border-0 block" title={file.name} />
-      )}
+    <div className="relative flex flex-col h-full w-full overflow-hidden select-none bg-[#060607]">
+      {/* Styles for dynamic interactions */}
+      <style jsx>{`
+        .viewer-stage {
+          flex: 1;
+          position: relative;
+          overflow: hidden;
+          background: radial-gradient(circle at 50% 40%, hsla(38, 50%, 30%, 0.08), transparent 65%), #060607;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: grab;
+          touch-action: none;
+        }
+        .viewer-stage.grabbing {
+          cursor: grabbing;
+        }
+        .stage-inner {
+          transform-origin: center center;
+          will-change: transform;
+          user-select: none;
+        }
+        .zoom-hint {
+          position: absolute;
+          bottom: 14px;
+          left: 50%;
+          transform: translateX(-50%);
+          font-size: 10px;
+          color: hsl(220 10% 55%);
+          font-family: var(--font-mono, monospace);
+          background: hsla(220, 20%, 5%, 0.7);
+          padding: 6px 14px;
+          border-radius: 9999px;
+          border: 1px solid hsla(38, 60%, 50%, 0.12);
+          opacity: 0.85;
+          pointer-events: none;
+          z-index: 10;
+        }
+        .viewer-bottombar {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 14px;
+          padding: 12px;
+          border-top: 1px solid hsla(38, 60%, 50%, 0.12);
+          background: rgba(10, 10, 12, 0.4);
+          backdrop-filter: blur(10px);
+          flex-shrink: 0;
+          z-index: 10;
+        }
+        .zoom-readout {
+          font-family: var(--font-mono, monospace);
+          font-size: 12px;
+          color: hsl(220 10% 60%);
+          width: 52px;
+          text-align: center;
+        }
+        .icon-btn-viewer {
+          width: 32px;
+          height: 32px;
+          border-radius: 9999px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: hsla(220, 15%, 15%, 0.6);
+          border: 1px solid hsla(38, 60%, 50%, 0.15);
+          color: hsl(40 20% 92%);
+          cursor: pointer;
+          transition: border-color .2s ease, background .2s ease, transform .2s ease;
+        }
+        .icon-btn-viewer:hover {
+          border-color: hsla(38, 80%, 60%, 0.5);
+          background: hsla(38, 60%, 50%, 0.15);
+        }
+        .icon-btn-viewer:active {
+          transform: scale(.92);
+        }
+        .icon-btn-viewer svg {
+          width: 15px;
+          height: 15px;
+        }
+        .iframe-container {
+          box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.7);
+          border-radius: 4px;
+          overflow: hidden;
+          background: white;
+        }
+      `}</style>
+
+      {/* Main interactive stage */}
+      <div 
+        ref={stageRef}
+        className={`viewer-stage ${isDragging ? "grabbing" : ""}`}
+        onWheel={handleWheel}
+        onDoubleClick={resetView}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+      >
+        <div 
+          className="stage-inner"
+          style={{
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+          }}
+        >
+          {file.type === "photo" && (
+            <img 
+              src={url} 
+              alt={file.name} 
+              className="max-h-[75vh] w-auto object-contain block select-none pointer-events-none" 
+              draggable={false}
+            />
+          )}
+
+          {file.type === "pdf" && (
+            <div className="relative iframe-container" style={{ width: "80vw", height: "76vh", maxWidth: "850px" }}>
+              {/* Overlay blocker to capture dragging events when mouse moves over the iframe */}
+              {isDragging && <div className="absolute inset-0 z-20 cursor-grabbing bg-transparent" />}
+              <iframe 
+                src={url} 
+                className="w-full h-full border-0 block" 
+                title={file.name} 
+              />
+            </div>
+          )}
+
+          {file.type === "video" && (
+            <div className="relative" style={{ width: "80vw", height: "70vh", maxWidth: "960px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {isDragging && <div className="absolute inset-0 z-20 cursor-grabbing bg-transparent" />}
+              <video 
+                src={url} 
+                controls 
+                autoPlay 
+                className="max-w-full max-h-full object-contain block"
+              >
+                Your browser does not support the video tag.
+              </video>
+            </div>
+          )}
+        </div>
+
+        {/* Zoom Hint */}
+        <div className="zoom-hint">Scroll to zoom · Drag to pan · Double-click to reset</div>
+      </div>
+
+      {/* Bottom control bar */}
+      <div className="viewer-bottombar">
+        <button 
+          className="icon-btn-viewer" 
+          onClick={handleZoomOut} 
+          title="Zoom out"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <circle cx="10.5" cy="10.5" r="6.5" />
+            <path d="M20 20l-4.8-4.8" />
+            <path d="M7.5 10.5h6" />
+          </svg>
+        </button>
+        
+        <div className="zoom-readout">{Math.round(scale * 100)}%</div>
+        
+        <button 
+          className="icon-btn-viewer" 
+          onClick={handleZoomIn} 
+          title="Zoom in"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <circle cx="10.5" cy="10.5" r="6.5" />
+            <path d="M20 20l-4.8-4.8" />
+            <path d="M10.5 7.5v6M7.5 10.5h6" />
+          </svg>
+        </button>
+
+        <button 
+          className="icon-btn-viewer" 
+          onClick={resetView} 
+          title="Reset View"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 12a9 9 0 1 0 3-6.7" />
+            <path d="M3 4v5h5" />
+          </svg>
+        </button>
+      </div>
     </div>
   );
 }
