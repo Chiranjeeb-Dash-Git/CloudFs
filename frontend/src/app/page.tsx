@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 const NimbusDisk = dynamic(() => import("@/components/NimbusDisk"), { ssr: false });
 import { RevealText } from "@/components/RevealText";
 import { StartFreeButton } from "@/components/StartFreeButton";
+import { PenWritingText } from "@/components/PenWritingText";
 
 export default function LandingPage() {
   const [menu, setMenu] = useState(false);
@@ -43,12 +44,6 @@ export default function LandingPage() {
             <span className="text-sm font-medium tracking-wide md:text-base">CloudFS</span>
           </Link>
 
-          <div className="hidden items-center gap-10 rounded-full border border-white/5 bg-white/[0.02] px-8 py-2.5 text-sm font-medium text-white/60 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] backdrop-blur-md md:flex">
-            <Link href="/files" className="transition-colors hover:text-white">
-              Storage
-            </Link>
-          </div>
-
           <div className="hidden md:block">
             <Link
               href="/login"
@@ -67,7 +62,6 @@ export default function LandingPage() {
 
         {menu ? (
           <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/70 md:hidden">
-            <Link href="/files">Storage</Link>
             <Link href="/login">Access Console</Link>
           </div>
         ) : null}
@@ -78,9 +72,10 @@ export default function LandingPage() {
               text="Orchestrate every media file into a single point of truth."
               className="text-4xl leading-[1.05] font-light tracking-tighter text-white md:text-5xl lg:text-6xl"
             />
-            <p className="max-w-md text-sm leading-relaxed font-medium text-white/60 md:text-base">
-              CloudFS ingests media streams across your entire ecosystem, replicating and indexing every asset so nothing is ever lost to the noise.
-            </p>
+            <PenWritingText
+              text="CloudFS ingests media streams across your entire ecosystem, replicating and indexing every asset so nothing is ever lost to the noise."
+              className="max-w-md text-sm leading-relaxed font-medium text-white/60 md:text-base"
+            />
             <div className="flex flex-wrap items-center gap-4 pt-2">
               <StartFreeButton />
             </div>
