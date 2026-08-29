@@ -14,7 +14,7 @@ create table if not exists users (
   two_factor_enabled boolean default false,
   two_factor_secret text,
   providers jsonb default '{}'::jsonb,
-  quota_bytes bigint default 107374182400,
+  quota_bytes bigint default 524288000,
   created_at timestamptz default now()
 );
 
@@ -62,6 +62,7 @@ create table if not exists file_versions (
   storage_key text not null,
   size_bytes bigint,
   checksum text,
+  file_data bytea,
   created_at timestamptz default now()
 );
 create index if not exists versions_file on file_versions(file_id);

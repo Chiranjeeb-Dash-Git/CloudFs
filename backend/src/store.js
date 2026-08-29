@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const now = () => new Date().toISOString();
-const DEFAULT_QUOTA_BYTES = Number(process.env.DEFAULT_QUOTA_BYTES || 107374182400); // 100 GB default
+const DEFAULT_QUOTA_BYTES = Number(process.env.DEFAULT_QUOTA_BYTES || 524288000); // 500 MB default (Supabase free tier cap)
 
 // Convert camelCase keys to snake_case for PostgreSQL columns
 function camelToSnake(str) {
@@ -116,7 +116,7 @@ export function createMemoryStore() {
 export const mem = createMemoryStore();
 
 // Setup PostgreSQL pool if DATABASE_URL is configured
-let pool = null;
+export let pool = null;
 let isInitialLoad = false;
 
 if (process.env.DATABASE_URL) {
@@ -308,8 +308,11 @@ if (process.env.DATABASE_URL) {
         )
       `);
 
-      // Upgrade existing users' default quota from 15 GB to 100 GB
-      await pool.query("UPDATE users SET quota_bytes = 107374182400 WHERE quota_bytes = 16106127360");
+      // Ensure file_data bytea column exists in file_versions for database storage
+      await pool.query("ALTER TABLE file_versions ADD COLUMN IF NOT EXISTS file_data bytea");
+
+      // Update all users' default quota to 500 MB (524288000 bytes) to match Supabase database tier capacity
+      await pool.query("UPDATE users SET quota_bytes = 524288000");
 
       // 3. Load records from DB into local cache
       const tables = [

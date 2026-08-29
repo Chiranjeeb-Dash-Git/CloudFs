@@ -120,7 +120,7 @@ export default function DashboardPage() {
                 Welcome back, {user?.name?.split(" ")[0] || "User"}.
               </h1>
               <p className="max-w-md text-sm text-muted-foreground">
-                {formatBytes(storage?.usedBytes ?? 0)} used of {formatBytes(storage?.quotaBytes ?? 16106127360)} — everything synced, mirrored across 3 regions, and encrypted at rest.
+                {formatBytes(storage?.usedBytes ?? 0)} used of {formatBytes(storage?.quotaBytes ?? 524288000)} — everything synced and stored securely in the cloud database.
               </p>
             </div>
 

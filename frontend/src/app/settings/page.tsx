@@ -120,7 +120,7 @@ export default function SettingsPage() {
   }
 
   const usedBytes = storageData?.usedBytes ?? 0;
-  const quotaBytes = storageData?.quotaBytes ?? 16106127360;
+  const quotaBytes = storageData?.quotaBytes ?? 524288000;
   const percentUsed = storageData?.percentUsed ?? Math.round((usedBytes / quotaBytes) * 100);
   const plan = storageData?.plan ?? "free";
 

@@ -1,13 +1,11 @@
 import { Router } from "express";
-import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { z } from "zod";
-import { mem } from "../store.js";
+import { mem, pool } from "../store.js";
 import { camelFile, fail, sanitizeFilename, signedUrlToken, slugName, verifySignedUrlToken } from "../util.js";
 import { requireAuth } from "../auth.js";
 import { assertRead, assertWrite, getFile, logActivity } from "../acl.js";
-import { storageDir } from "../config.js";
 
 export const filesRouter = Router();
 
@@ -86,15 +84,28 @@ filesRouter.post("/init", requireAuth, (req, res, next) => {
   }
 });
 
-filesRouter.put("/:id/bytes", requireAuth, (req, res, next) => {
+filesRouter.put("/:id/bytes", requireAuth, async (req, res, next) => {
   try {
     assertWrite(req.user.id, "file", req.params.id);
     const file = getFile(req.params.id);
-    const dest = path.join(storageDir, file.id);
     const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.from([]);
-    fs.writeFileSync(dest, buf);
     file.sizeBytes = buf.length;
     const etag = `"${crypto.createHash("md5").update(buf).digest("hex")}"`;
+
+    // Save file binary data directly to database
+    const version = mem.versions.find((v) => v.fileId === file.id);
+    if (version) {
+      version.sizeBytes = buf.length;
+      version.fileData = buf;
+    }
+    if (pool) {
+      await pool.query(
+        "UPDATE file_versions SET file_data = $1, size_bytes = $2 WHERE file_id = $3",
+        [buf, buf.length, file.id]
+      );
+      await pool.query("UPDATE files SET size_bytes = $1 WHERE id = $2", [buf.length, file.id]);
+    }
+
     res.setHeader("etag", etag);
     res.json({ ok: true, etag, sizeBytes: buf.length });
   } catch (err) {
@@ -217,12 +228,23 @@ filesRouter.get("/:id", requireAuth, (req, res, next) => {
   }
 });
 
-filesRouter.get("/:id/download", requireAuth, (req, res, next) => {
+filesRouter.get("/:id/download", requireAuth, async (req, res, next) => {
   try {
     assertRead(req.user.id, "file", req.params.id);
     const file = getFile(req.params.id);
-    const dest = path.join(storageDir, file.id);
-    if (!fs.existsSync(dest)) throw fail(404, "NOT_FOUND", "Object missing from storage");
+
+    // Try in-memory cache first, then query database
+    const version = mem.versions.find((v) => v.fileId === file.id);
+    let data = version?.fileData;
+    if (!data && pool) {
+      const dbRes = await pool.query("SELECT file_data FROM file_versions WHERE file_id = $1 ORDER BY version_number DESC LIMIT 1", [file.id]);
+      if (dbRes.rows[0]?.file_data) {
+        data = dbRes.rows[0].file_data;
+        if (version) version.fileData = data; // cache it
+      }
+    }
+    if (!data) throw fail(404, "NOT_FOUND", "File data not found in database");
+
     logActivity(req.user.id, "download", "file", file.id, {});
     res.setHeader("Content-Type", file.mimeType || "application/octet-stream");
     res.setHeader("Cache-Control", "private, max-age=60");
@@ -231,7 +253,7 @@ filesRouter.get("/:id/download", requireAuth, (req, res, next) => {
     } else {
       res.setHeader("Content-Disposition", `attachment; filename="${file.name}"`);
     }
-    res.sendFile(dest);
+    res.send(data);
   } catch (err) {
     next(err);
   }
@@ -257,30 +279,46 @@ filesRouter.get("/:id/public-download", async (req, res, next) => {
     }
     const file = getFile(req.params.id);
     if (!file) throw fail(404, "NOT_FOUND", "File not found");
-    const dest = path.join(storageDir, file.id);
-    if (!fs.existsSync(dest)) throw fail(404, "NOT_FOUND", "Object missing from storage");
+
+    const version = mem.versions.find((v) => v.fileId === file.id);
+    let data = version?.fileData;
+    if (!data && pool) {
+      const dbRes = await pool.query("SELECT file_data FROM file_versions WHERE file_id = $1 ORDER BY version_number DESC LIMIT 1", [file.id]);
+      if (dbRes.rows[0]?.file_data) data = dbRes.rows[0].file_data;
+    }
+    if (!data) throw fail(404, "NOT_FOUND", "File data not found in database");
+
     res.setHeader("Content-Disposition", `attachment; filename="${file.name}"`);
-    res.sendFile(dest);
+    res.setHeader("Content-Type", file.mimeType || "application/octet-stream");
+    res.send(data);
   } catch (err) {
     next(err);
   }
 });
 
-filesRouter.get("/:id/thumbnail", requireAuth, (req, res, next) => {
+filesRouter.get("/:id/thumbnail", requireAuth, async (req, res, next) => {
   try {
     assertRead(req.user.id, "file", req.params.id);
     const file = getFile(req.params.id);
     if (!file) throw fail(404, "NOT_FOUND", "File not found");
-    const dest = path.join(storageDir, file.id);
-    if (!fs.existsSync(dest)) throw fail(404, "NOT_FOUND", "Object missing from storage");
-    const buf = fs.readFileSync(dest);
+
+    const version = mem.versions.find((v) => v.fileId === file.id);
+    let data = version?.fileData;
+    if (!data && pool) {
+      const dbRes = await pool.query("SELECT file_data FROM file_versions WHERE file_id = $1 ORDER BY version_number DESC LIMIT 1", [file.id]);
+      if (dbRes.rows[0]?.file_data) {
+        data = dbRes.rows[0].file_data;
+        if (version) version.fileData = data;
+      }
+    }
+
     const mt = (file.mimeType || "").toLowerCase();
-    if (mt.startsWith("image/")) {
+    if (data && mt.startsWith("image/")) {
       res.setHeader("Content-Type", file.mimeType);
       res.setHeader("Cache-Control", "private, max-age=300");
-      return res.end(buf);
+      return res.end(data);
     }
-    // For non-image: return a small JSON descriptor; clients can use SVG fallback.
+    // For non-image or missing data: return a small JSON descriptor
     res.json({
       kind: "placeholder",
       mimeType: file.mimeType,
@@ -304,7 +342,7 @@ filesRouter.get("/:id/versions", requireAuth, (req, res, next) => {
   }
 });
 
-filesRouter.post("/:id/versions/:versionId/restore", requireAuth, (req, res, next) => {
+filesRouter.post("/:id/versions/:versionId/restore", requireAuth, async (req, res, next) => {
   try {
     assertWrite(req.user.id, "file", req.params.id);
     const file = getFile(req.params.id);
@@ -327,10 +365,12 @@ filesRouter.post("/:id/versions/:versionId/restore", requireAuth, (req, res, nex
     file.checksum = version.checksum;
     file.versionId = newVersion.id;
     file.updatedAt = mem.now();
-    // Also restore the actual bytes from version's stored blob
-    const versionPath = path.join(storageDir, version.id);
-    if (fs.existsSync(versionPath)) {
-      fs.copyFileSync(versionPath, path.join(storageDir, file.id));
+    // Copy file_data from the target version to the new current version in DB
+    if (pool) {
+      await pool.query(
+        "UPDATE file_versions SET file_data = (SELECT file_data FROM file_versions WHERE id = $1) WHERE id = $2",
+        [version.id, newVersion.id]
+      );
     }
     logActivity(req.user.id, "restore", "file", file.id, { versionId: version.id });
     res.json({ file: camelFile(file) });
