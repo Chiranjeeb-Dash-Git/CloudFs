@@ -206,13 +206,26 @@ function FileThumbnail({ fileId, type, name, seed }: { fileId: string; type: str
           credentials: "include",
         });
         if (!res.ok) throw new Error("failed");
+        
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          // If the thumbnail is a JSON placeholder, fallback to the full download URL
+          if (active) {
+            setSrc(`${API_BASE}/api/files/${fileId}/download`);
+          }
+          return;
+        }
+
         const blob = await res.blob();
         if (active) {
           objectUrl = URL.createObjectURL(blob);
           setSrc(objectUrl);
         }
       } catch (err) {
-        // Fallback
+        if (active) {
+          // Fallback to full download URL on error or if no thumbnail exists
+          setSrc(`${API_BASE}/api/files/${fileId}/download`);
+        }
       }
     }
 
@@ -599,46 +612,6 @@ function FileModalViewer({ file }: { file: FileItem }) {
 
         {/* Zoom Hint */}
         <div className="zoom-hint">Scroll to zoom · Drag to pan · Double-click to reset</div>
-      </div>
-
-      {/* Bottom control bar */}
-      <div className="viewer-bottombar">
-        <button 
-          className="icon-btn-viewer" 
-          onClick={handleZoomOut} 
-          title="Zoom out"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <circle cx="10.5" cy="10.5" r="6.5" />
-            <path d="M20 20l-4.8-4.8" />
-            <path d="M7.5 10.5h6" />
-          </svg>
-        </button>
-        
-        <div className="zoom-readout">{Math.round(scale * 100)}%</div>
-        
-        <button 
-          className="icon-btn-viewer" 
-          onClick={handleZoomIn} 
-          title="Zoom in"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <circle cx="10.5" cy="10.5" r="6.5" />
-            <path d="M20 20l-4.8-4.8" />
-            <path d="M10.5 7.5v6M7.5 10.5h6" />
-          </svg>
-        </button>
-
-        <button 
-          className="icon-btn-viewer" 
-          onClick={resetView} 
-          title="Reset View"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 12a9 9 0 1 0 3-6.7" />
-            <path d="M3 4v5h5" />
-          </svg>
-        </button>
       </div>
     </div>
   );
@@ -1361,14 +1334,16 @@ export default function GalleryPage() {
           overflow: hidden;
           background: #0a0a0a;
         }
-        .file-thumb svg,
+        .file-thumb-art svg,
+        .file-thumb > svg,
         .file-thumb canvas {
           width: 100%;
           height: 100%;
           display: block;
           transition: transform 1s var(--ease-cinema);
         }
-        .file-card:hover .file-thumb svg,
+        .file-card:hover .file-thumb-art svg,
+        .file-card:hover .file-thumb > svg,
         .file-card:hover .file-thumb canvas {
           transform: scale(1.09);
         }
