@@ -2,12 +2,27 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 export type ApiError = { error: { code: string; message: string } };
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, isRetry = false): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     credentials: "include",
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
     ...init,
   });
+
+  if (res.status === 401 && !isRetry && !path.includes("/login") && !path.includes("/register") && !path.includes("/refresh")) {
+    try {
+      const refreshRes = await fetch(`${API_BASE}/api/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (refreshRes.ok) {
+        return request<T>(path, init, true);
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
   const data = (await res.json().catch(() => ({}))) as T & ApiError;
   if (!res.ok) {
     const message = data?.error?.message ?? `Request failed (${res.status})`;

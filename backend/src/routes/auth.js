@@ -80,7 +80,8 @@ authRouter.post("/register", async (req, res, next) => {
 authRouter.post("/login", async (req, res, next) => {
   try {
     const body = loginSchema.parse(req.body);
-    const user = mem.users.find((u) => u.email === body.email.toLowerCase());
+    const cleanEmail = body.email.toLowerCase().trim();
+    const user = mem.users.find((u) => u.email.toLowerCase().trim() === cleanEmail);
     if (!user || !user.passwordHash || !(await bcrypt.compare(body.password, user.passwordHash))) {
       throw fail(401, "UNAUTHENTICATED", "Invalid email or password");
     }
@@ -119,18 +120,17 @@ authRouter.post("/refresh", (req, res, next) => {
   try {
     const token = req.cookies?.refresh_token;
     if (!token) throw fail(401, "UNAUTHENTICATED", "Missing refresh token");
-    const data = mem.refresh.get(token);
-    if (!data) throw fail(401, "UNAUTHENTICATED", "Unknown refresh token");
     const payload = jwt.verify(token, process.env.REFRESH_SECRET || "dev-refresh");
-    if (payload.typ !== "refresh" || payload.sub !== data.userId) {
-      throw fail(401, "UNAUTHENTICATED", "Refresh token mismatch");
+    if (!payload || payload.typ !== "refresh" || !payload.sub) {
+      throw fail(401, "UNAUTHENTICATED", "Invalid refresh token payload");
     }
     const user = mem.users.find((u) => u.id === payload.sub);
     if (!user) throw fail(401, "UNAUTHENTICATED", "User missing");
-    // Rotate: invalidate old refresh, issue new
+    const sess = mem.sessions.find((s) => s.id === payload.jti || s.userId === user.id);
+    if (sess && sess.revokedAt) {
+      throw fail(401, "UNAUTHENTICATED", "Session revoked");
+    }
     mem.refresh.delete(token);
-    const sess = mem.sessions.find((s) => s.id === data.jti);
-    if (sess) sess.lastActiveAt = mem.now();
     issueSession(res, req, user);
     res.json({ user: publicUser(user) });
   } catch (err) {

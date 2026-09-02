@@ -74,15 +74,48 @@ function parseDevice(ua) {
   return { label: `${browser} on ${os}`, os, browser };
 }
 
-export function requireAuth(req, _res, next) {
+export function requireAuth(req, res, next) {
   try {
-    const token = req.cookies?.access_token;
-    if (!token) throw fail(401, "UNAUTHENTICATED", "Sign in required");
-    const payload = jwt.verify(token, accessSecret());
+    let token = req.cookies?.access_token;
+    let payload = null;
+
+    if (token) {
+      try {
+        payload = jwt.verify(token, accessSecret());
+      } catch (e) {
+        // access_token expired or invalid
+        token = null;
+      }
+    }
+
+    // If access token is missing or expired, try auto-refreshing via refresh_token cookie
+    if (!payload) {
+      const refreshToken = req.cookies?.refresh_token;
+      if (refreshToken) {
+        try {
+          const refreshPayload = jwt.verify(refreshToken, refreshSecret());
+          if (refreshPayload && refreshPayload.typ === "refresh" && refreshPayload.sub) {
+            const user = mem.users.find((u) => u.id === refreshPayload.sub);
+            if (user) {
+              const sess = mem.sessions.find((s) => s.id === refreshPayload.jti || s.userId === user.id);
+              if (!sess || !sess.revokedAt) {
+                // Automatically re-issue fresh auth cookies!
+                setAuthCookies(res, user, { refreshJti: refreshPayload.jti });
+                req.user = { id: user.id, email: user.email, name: user.name, imageUrl: user.imageUrl };
+                return next();
+              }
+            }
+          }
+        } catch (e) {
+          // refresh token also invalid
+        }
+      }
+      throw fail(401, "UNAUTHENTICATED", "Sign in required");
+    }
+
     const user = mem.users.find((u) => u.id === payload.sub);
     if (!user) throw fail(401, "UNAUTHENTICATED", "Session user missing");
     req.user = { id: user.id, email: user.email, name: user.name, imageUrl: user.imageUrl };
-    // Touch session activity if any
     const sess = mem.sessions.find((s) => s.userId === user.id && !s.revokedAt);
     if (sess) sess.lastActiveAt = mem.now();
     next();
