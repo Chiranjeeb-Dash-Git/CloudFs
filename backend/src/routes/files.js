@@ -289,8 +289,8 @@ filesRouter.get("/:id/public-download", async (req, res, next) => {
     const file = getFile(req.params.id);
     if (!file) throw fail(404, "NOT_FOUND", "File not found");
 
-    const version = mem.versions.find((v) => v.fileId === file.id);
-    let data = version?.fileData;
+    let version = mem.versions.find((v) => v.id === file.versionId) || mem.versions.find((v) => v.fileId === file.id && v.fileData);
+    let data = version?.fileData || tempUploads.get(file.id);
     if (!data && pool) {
       const dbRes = await pool.query("SELECT file_data FROM file_versions WHERE file_id = $1 ORDER BY version_number DESC LIMIT 1", [file.id]);
       if (dbRes.rows[0]?.file_data) data = dbRes.rows[0].file_data;

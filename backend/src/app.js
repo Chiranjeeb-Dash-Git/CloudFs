@@ -21,7 +21,14 @@ export function createApp() {
   const app = express();
   const origin = process.env.CORS_ORIGIN || "http://localhost:3000";
 
-  app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+      crossOriginEmbedderPolicy: false,
+      frameguard: false,
+      contentSecurityPolicy: false,
+    }),
+  );
   app.use(
     cors({
       origin,
