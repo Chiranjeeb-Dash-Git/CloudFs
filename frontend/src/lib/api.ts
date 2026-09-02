@@ -83,6 +83,36 @@ export const api = {
     }),
   deleteAllSessions: () =>
     request("/api/sessions", { method: "DELETE" }),
+  renameFile: (id: string, name: string) =>
+    request<{ file: DriveFile }>(`/api/files/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+  moveFile: (id: string, folderId: string | null) =>
+    request<{ file: DriveFile }>(`/api/files/${id}`, { method: "PATCH", body: JSON.stringify({ folderId }) }),
+  renameFolder: (id: string, name: string) =>
+    request<{ folder: DriveFolder }>(`/api/folders/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+  moveFolder: (id: string, parentId: string | null) =>
+    request<{ folder: DriveFolder }>(`/api/folders/${id}`, { method: "PATCH", body: JSON.stringify({ parentId }) }),
+  folderTree: () =>
+    request<{ folders: DriveFolder[] }>("/api/folders/tree"),
+  deleteShare: (id: string) =>
+    request(`/api/shares/${id}`, { method: "DELETE" }),
+  sharesInbox: () =>
+    request<{ items: (DriveFile | DriveFolder)[] }>("/api/shares/inbox"),
+  sharesOutbox: () =>
+    request<{ items: any[] }>("/api/shares/outbox"),
+  linksList: () =>
+    request<{ links: any[] }>("/api/links"),
+  deleteLink: (id: string) =>
+    request(`/api/link-shares/${id}`, { method: "DELETE" }),
+  downloadUrl: (id: string) => `${API_BASE}/api/files/${id}/download`,
+  searchAdvanced: (params: { q?: string; type?: string; owner?: string; sort?: string; order?: string }) => {
+    const query = new URLSearchParams();
+    if (params.q) query.append("q", params.q);
+    if (params.type && params.type !== "all") query.append("type", params.type);
+    if (params.owner && params.owner !== "all") query.append("owner", params.owner);
+    if (params.sort) query.append("sort", params.sort);
+    if (params.order) query.append("order", params.order);
+    return request<{ results: Array<DriveFile | DriveFolder> }>(`/api/search?${query.toString()}`);
+  },
 };
 
 export type DriveFolder = {

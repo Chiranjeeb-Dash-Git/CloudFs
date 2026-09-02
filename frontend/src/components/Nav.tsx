@@ -12,6 +12,7 @@ const navItems = [
   { href: "/files", label: "Files" },
   { href: "/gallery", label: "Gallery" },
   { href: "/shared", label: "Shared" },
+  { href: "/trash", label: "Trash" },
   { href: "/security", label: "Security" },
   { href: "/settings", label: "Settings" },
 ];
@@ -107,7 +108,7 @@ export function Nav({ theme = "mono", showUpload = true }: { theme?: "nexacore" 
         ) : null}
         {showUpload ? (
           <button
-            onClick={ui.openUpload}
+            onClick={() => ui.openUpload()}
             className={`flex items-center gap-2 rounded-full px-6 py-3 text-sm font-medium transition-transform duration-500 hover:-translate-y-0.5 ${
               theme === "studio"
                 ? "accent-btn text-white"
@@ -121,9 +122,13 @@ export function Nav({ theme = "mono", showUpload = true }: { theme?: "nexacore" 
         {theme !== "studio" ? (
           <Link
             href="/settings"
-            className={`${t.avatar} flex size-10 items-center justify-center rounded-full text-xs font-semibold`}
+            className={`${t.avatar} flex size-10 items-center justify-center rounded-full text-xs font-semibold overflow-hidden border border-hairline`}
           >
-            {initials}
+            {user?.imageUrl ? (
+              <img src={user.imageUrl} alt={user.name} className="size-full object-cover" />
+            ) : (
+              initials
+            )}
           </Link>
         ) : null}
       </div>

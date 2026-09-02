@@ -209,27 +209,39 @@ export default function DashboardPage() {
               <div className="panel-inner">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,oklch(1_0_0/12%)_0%,transparent_60%)]" />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="float-slow relative h-52 w-40 transition-transform duration-700 group-hover:scale-105">
-                    <svg viewBox="0 0 160 210" className="h-full w-full" fill="none">
-                      <defs>
-                        <radialGradient id="orbGlow" cx="50%" cy="35%" r="65%">
-                          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.35" />
-                          <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
-                        </radialGradient>
-                        <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#f4f4f5" />
-                          <stop offset="100%" stopColor="#71717a" />
-                        </linearGradient>
-                      </defs>
-                      <circle cx="80" cy="90" r="75" fill="url(#orbGlow)" />
-                      <ellipse cx="80" cy="55" rx="26" ry="30" stroke="url(#lineGrad)" strokeWidth="1.4" />
-                      <path d="M56 45 Q80 10 104 45 Q108 30 80 22 Q52 30 56 45Z" stroke="url(#lineGrad)" strokeWidth="1.4" />
-                      <path d="M70 80 L70 95 M90 80 L90 95" stroke="url(#lineGrad)" strokeWidth="1.4" />
-                      <path d="M30 205 C30 140 55 100 80 100 C105 100 130 140 130 205" stroke="url(#lineGrad)" strokeWidth="1.4" />
-                      <path d="M65 100 Q80 118 95 100" stroke="url(#lineGrad)" strokeWidth="1" />
-                    </svg>
-                    <span className="pulse-glow absolute top-4 right-4 size-2 rounded-full bg-foreground" />
-                  </div>
+                  {user?.imageUrl ? (
+                    <div className="float-slow relative h-40 w-40 rounded-full border border-hairline p-2 bg-zinc-900/30 backdrop-blur-md transition-transform duration-700 group-hover:scale-105 shadow-2xl flex items-center justify-center">
+                      <div className="absolute -inset-1 rounded-full bg-gradient-to-tr from-[#c9b98a] to-transparent opacity-20 blur-md group-hover:opacity-40 transition-opacity duration-700" />
+                      <img 
+                        src={user.imageUrl} 
+                        alt={user?.name || "User"} 
+                        className="size-full rounded-full object-cover relative z-10"
+                      />
+                      <span className="pulse-glow absolute top-2 right-2 size-2.5 rounded-full bg-[#c9b98a] z-20" />
+                    </div>
+                  ) : (
+                    <div className="float-slow relative h-52 w-40 transition-transform duration-700 group-hover:scale-105">
+                      <svg viewBox="0 0 160 210" className="h-full w-full" fill="none">
+                        <defs>
+                          <radialGradient id="orbGlow" cx="50%" cy="35%" r="65%">
+                            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.35" />
+                            <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+                          </radialGradient>
+                          <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#f4f4f5" />
+                            <stop offset="100%" stopColor="#71717a" />
+                          </linearGradient>
+                        </defs>
+                        <circle cx="80" cy="90" r="75" fill="url(#orbGlow)" />
+                        <ellipse cx="80" cy="55" rx="26" ry="30" stroke="url(#lineGrad)" strokeWidth="1.4" />
+                        <path d="M56 45 Q80 10 104 45 Q108 30 80 22 Q52 30 56 45Z" stroke="url(#lineGrad)" strokeWidth="1.4" />
+                        <path d="M70 80 L70 95 M90 80 L90 95" stroke="url(#lineGrad)" strokeWidth="1.4" />
+                        <path d="M30 205 C30 140 55 100 80 100 C105 100 130 140 130 205" stroke="url(#lineGrad)" strokeWidth="1.4" />
+                        <path d="M65 100 Q80 118 95 100" stroke="url(#lineGrad)" strokeWidth="1" />
+                      </svg>
+                      <span className="pulse-glow absolute top-4 right-4 size-2 rounded-full bg-foreground" />
+                    </div>
+                  )}
                 </div>
 
                 <div className="relative flex h-full flex-col justify-between p-7">

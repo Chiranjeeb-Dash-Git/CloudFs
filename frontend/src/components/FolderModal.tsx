@@ -4,7 +4,7 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 
-export function FolderModal({ onClose }: { onClose: () => void }) {
+export function FolderModal({ onClose, parentId = undefined }: { onClose: () => void, parentId?: string }) {
   const [name, setName] = useState("");
   const [status, setStatus] = useState("");
   const queryClient = useQueryClient();
@@ -25,7 +25,7 @@ export function FolderModal({ onClose }: { onClose: () => void }) {
           className="sheen relative h-[48px] w-full overflow-hidden rounded-full border border-hairline bg-secondary text-sm"
           onClick={async () => {
             try {
-              await api.createFolder({ name, parentId: null });
+              await api.createFolder({ name, parentId: parentId || null });
               setStatus("Folder created.");
               queryClient.invalidateQueries({ queryKey: ["search"] });
               queryClient.invalidateQueries({ queryKey: ["folder"] });

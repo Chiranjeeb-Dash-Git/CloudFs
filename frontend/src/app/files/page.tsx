@@ -10,6 +10,7 @@ import { api } from "@/lib/api";
 const EmberParticles = dynamic(() => import("@/components/EmberParticles"), { ssr: false });
 import { Nav } from "@/components/Nav";
 import { useDriveUi } from "@/components/DriveUi";
+import { FileBrowser } from "@/components/FileBrowser";
 
 function formatBytes(bytes: number, decimals = 1) {
   if (bytes === 0) return "0 Bytes";
@@ -229,6 +230,11 @@ export default function FilesPage() {
           </article>
         </section>
 
+        {/* File Browser Component */}
+        <section className="my-12">
+          <FileBrowser />
+        </section>
+
         {/* Editorial statement band */}
         <section className="my-16 flex items-center gap-6">
           <span className="hairline flex-1" />
@@ -241,7 +247,7 @@ export default function FilesPage() {
         <section className="grid grid-cols-1 md:grid-cols-2 gap-5 lg:gap-6">
           {/* Upload card */}
           <article className="studio-card" style={{ "--lift-delay": "3.6s" } as React.CSSProperties}>
-            <button onClick={ui.openUpload} className="studio-card-inner sheen-studio ambient-loop h-full p-7 flex items-center justify-between min-h-[120px] w-full text-left" style={{ "--sheen-delay": "0.5s" } as React.CSSProperties}>
+            <button onClick={() => ui.openUpload()} className="studio-card-inner sheen-studio ambient-loop h-full p-7 flex items-center justify-between min-h-[120px] w-full text-left" style={{ "--sheen-delay": "0.5s" } as React.CSSProperties}>
               <div className="art-orb" style={{ width: "130px", height: "130px", top: "-30px", left: "40%", background: "radial-gradient(circle, var(--gold) 0%, transparent 70%)", opacity: 0.25 }} />
               <div className="relative">
                 <span className="text-[10px] font-mono tracking-widest" style={{ color: "var(--ink-soft)" }}>N° 07</span>

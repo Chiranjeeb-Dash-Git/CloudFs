@@ -39,6 +39,7 @@ export default function SettingsPage() {
   });
 
   const [name, setName] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMsg, setProfileMsg] = useState("");
 
@@ -57,6 +58,9 @@ export default function SettingsPage() {
   useEffect(() => {
     if (meData?.user?.name) {
       setName(meData.user.name);
+    }
+    if (meData?.user?.imageUrl) {
+      setImageUrl(meData.user.imageUrl);
     }
   }, [meData]);
 
@@ -81,7 +85,7 @@ export default function SettingsPage() {
     setSavingProfile(true);
     setProfileMsg("");
     try {
-      await api.updateProfile({ name });
+      await api.updateProfile({ name, imageUrl: imageUrl.trim() || null });
       await queryClient.invalidateQueries({ queryKey: ["me"] });
       setProfileMsg("Profile updated successfully");
     } catch (err) {
@@ -150,9 +154,13 @@ export default function SettingsPage() {
                 
                 <form onSubmit={handleSaveProfile} className="flex items-center gap-6">
                   <div className="relative shrink-0">
-                    <div className="chrome-pill flex size-24 items-center justify-center rounded-full text-2xl font-semibold">
-                      {initials}
-                    </div>
+                    {imageUrl.trim() ? (
+                      <img src={imageUrl.trim()} alt={name} className="size-24 rounded-full object-cover border border-hairline" />
+                    ) : (
+                      <div className="chrome-pill flex size-24 items-center justify-center rounded-full text-2xl font-semibold">
+                        {initials}
+                      </div>
+                    )}
                   </div>
                   <div className="flex-1">
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -172,6 +180,16 @@ export default function SettingsPage() {
                           value={user?.email ?? ""}
                           disabled
                           className="w-full rounded-full border border-hairline bg-surface/50 px-4 py-2.5 text-sm text-muted-foreground outline-none cursor-not-allowed"
+                        />
+                      </div>
+                      <div className="col-span-1 md:col-span-2">
+                        <label className="block mb-1 text-xs text-muted-foreground">Profile Picture URL</label>
+                        <input
+                          type="url"
+                          placeholder="https://example.com/avatar.jpg"
+                          value={imageUrl}
+                          onChange={(e) => setImageUrl(e.target.value)}
+                          className="w-full rounded-full border border-hairline bg-surface px-4 py-2.5 text-sm outline-none focus:border-primary"
                         />
                       </div>
                     </div>

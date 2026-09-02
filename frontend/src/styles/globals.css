@@ -189,27 +189,27 @@
 
 /* Theme: CloudFS Studio (Files Page) */
 .theme-studio {
-  --background: #0F0A09;
-  --foreground: #FFFFFF;
-  --card: #E6E1D6;
-  --card-foreground: #1c130f;
-  --primary: #4A1711;
-  --primary-foreground: #E6E1D6;
-  --secondary: #5A4A46;
-  --secondary-foreground: #E6E1D6;
-  --muted: #E6E1D6;
-  --muted-foreground: #5a4a40;
-  --accent: #B4884C;
-  --accent-foreground: #1c130f;
-  --border: #5A4A46;
-  --surface: #E6E1D6;
-  --surface-2: #E6E1D6;
-  --hairline: #5A4A46;
-  --ink: #1c130f;
-  --ink-soft: #5a4a40;
-  --gold: #B4884C;
+  --background: #0A0808;
+  --foreground: #F5F2EC;
+  --card: #181312;
+  --card-foreground: #F5F2EC;
+  --primary: #C95B46;
+  --primary-foreground: #FFFFFF;
+  --secondary: #2E2422;
+  --secondary-foreground: #F5F2EC;
+  --muted: #241C1A;
+  --muted-foreground: #A89B93;
+  --accent: #D4A359;
+  --accent-foreground: #0A0808;
+  --border: rgba(255, 255, 255, 0.12);
+  --surface: #140F0E;
+  --surface-2: #1F1816;
+  --hairline: rgba(255, 255, 255, 0.1);
+  --ink: #F5F2EC;
+  --ink-soft: #A89B93;
+  --gold: #D4A359;
   --font-sans: "Fraunces", ui-serif, serif;
-  --font-mono: ui-monospace, SFMono-Regular, monospace;
+  --font-mono: "Space Mono", ui-monospace, monospace;
   --radius: 2rem;
 }
 
