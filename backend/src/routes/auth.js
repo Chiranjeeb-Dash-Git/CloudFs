@@ -45,22 +45,30 @@ function issueSession(res, req, user) {
 authRouter.post("/register", async (req, res, next) => {
   try {
     const body = registerSchema.parse(req.body);
-    if (mem.users.some((u) => u.email.toLowerCase() === body.email.toLowerCase())) {
+    const existing = mem.users.find((u) => u.email.toLowerCase() === body.email.toLowerCase());
+    if (existing && existing.passwordHash) {
       throw fail(409, "CONFLICT", "Email already registered");
     }
-    const user = {
-      id: mem.id(),
-      email: body.email.toLowerCase(),
-      name: body.name,
-      imageUrl: null,
-      passwordHash: await bcrypt.hash(body.password, 12),
-      twoFactorEnabled: false,
-      twoFactorSecret: null,
-      providers: {},
-      quotaBytes: mem.DEFAULT_QUOTA_BYTES,
-      createdAt: mem.now(),
-    };
-    mem.users.push(user);
+    let user;
+    if (existing && !existing.passwordHash) {
+      existing.name = body.name;
+      existing.passwordHash = await bcrypt.hash(body.password, 12);
+      user = existing;
+    } else {
+      user = {
+        id: mem.id(),
+        email: body.email.toLowerCase(),
+        name: body.name,
+        imageUrl: null,
+        passwordHash: await bcrypt.hash(body.password, 12),
+        twoFactorEnabled: false,
+        twoFactorSecret: null,
+        providers: {},
+        quotaBytes: mem.DEFAULT_QUOTA_BYTES,
+        createdAt: mem.now(),
+      };
+      mem.users.push(user);
+    }
     issueSession(res, req, user);
     res.status(201).json({ user: publicUser(user) });
   } catch (err) {

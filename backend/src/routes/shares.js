@@ -24,12 +24,29 @@ const linkCreateSchema = z.object({
 
 function findGrantee(identifier) {
   if (!identifier) return null;
-  const id = String(identifier).toLowerCase();
-  return (
+  const id = String(identifier).toLowerCase().trim();
+  let user = (
     mem.users.find((u) => u.id === identifier) ||
-    mem.users.find((u) => u.email === id) ||
-    mem.users.find((u) => u.email.split("@")[0] === id)
+    mem.users.find((u) => u.email.toLowerCase() === id) ||
+    mem.users.find((u) => u.email.toLowerCase().split("@")[0] === id)
   );
+
+  if (!user && id.includes("@")) {
+    user = {
+      id: mem.id(),
+      email: id,
+      name: id.split("@")[0],
+      imageUrl: null,
+      passwordHash: null,
+      twoFactorEnabled: false,
+      twoFactorSecret: null,
+      providers: {},
+      quotaBytes: mem.DEFAULT_QUOTA_BYTES,
+      createdAt: mem.now(),
+    };
+    mem.users.push(user);
+  }
+  return user;
 }
 
 function resourceSummary(share) {

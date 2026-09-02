@@ -297,8 +297,12 @@ filesRouter.get("/:id/public-download", async (req, res, next) => {
     }
     if (!data) throw fail(404, "NOT_FOUND", "File data not found in database");
 
-    res.setHeader("Content-Disposition", `attachment; filename="${file.name}"`);
     res.setHeader("Content-Type", file.mimeType || "application/octet-stream");
+    if (req.query.inline === "true") {
+      res.setHeader("Content-Disposition", "inline");
+    } else {
+      res.setHeader("Content-Disposition", `attachment; filename="${file.name}"`);
+    }
     res.send(data);
   } catch (err) {
     next(err);
