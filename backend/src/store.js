@@ -110,6 +110,53 @@ export function createMemoryStore() {
     storageUsed,
     quotaFor,
     DEFAULT_QUOTA_BYTES,
+    findUser: async (id, googleSub, email) => {
+      let u = users.find((x) => 
+        (id && x.id === id) || 
+        (googleSub && x.providers?.google?.sub === googleSub) ||
+        (email && x.email.toLowerCase() === email.toLowerCase())
+      );
+      if (u) return u;
+      if (pool) {
+        let query = "SELECT * FROM users WHERE id = $1";
+        let params = [id];
+        
+        if (googleSub) {
+          query = "SELECT * FROM users WHERE providers->'google'->>'sub' = $1";
+          params = [googleSub];
+        } else if (email) {
+          query = "SELECT * FROM users WHERE email = $1";
+          params = [email.toLowerCase()];
+        }
+        
+        const res = await pool.query(query, params);
+        if (res.rows[0]) {
+          const item = toCamelCase(res.rows[0]);
+          const proxied = makePersistedObject(item, "users", "id");
+          users.push(proxied);
+          return proxied;
+        }
+      }
+      return null;
+    },
+    findSession: async (userId, jti) => {
+      let s = sessions.find((x) => (jti ? x.id === jti : x.userId === userId) && !x.revokedAt);
+      if (s) return s;
+      if (pool) {
+        const query = jti 
+          ? "SELECT * FROM sessions WHERE id = $1 AND revoked_at IS NULL LIMIT 1"
+          : "SELECT * FROM sessions WHERE user_id = $1 AND revoked_at IS NULL ORDER BY last_active_at DESC LIMIT 1";
+        const params = jti ? [jti] : [userId];
+        const res = await pool.query(query, params);
+        if (res.rows[0]) {
+          const item = toCamelCase(res.rows[0]);
+          const proxied = makePersistedObject(item, "sessions", "id");
+          sessions.push(proxied);
+          return proxied;
+        }
+      }
+      return null;
+    }
   };
 }
 

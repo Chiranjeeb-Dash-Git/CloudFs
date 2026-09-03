@@ -116,7 +116,7 @@ authRouter.post("/logout", (req, res) => {
   res.json({ ok: true });
 });
 
-authRouter.post("/refresh", (req, res, next) => {
+authRouter.post("/refresh", async (req, res, next) => {
   try {
     const token = req.cookies?.refresh_token;
     if (!token) throw fail(401, "UNAUTHENTICATED", "Missing refresh token");
@@ -124,9 +124,9 @@ authRouter.post("/refresh", (req, res, next) => {
     if (!payload || payload.typ !== "refresh" || !payload.sub) {
       throw fail(401, "UNAUTHENTICATED", "Invalid refresh token payload");
     }
-    const user = mem.users.find((u) => u.id === payload.sub);
+    const user = await mem.findUser(payload.sub);
     if (!user) throw fail(401, "UNAUTHENTICATED", "User missing");
-    const sess = mem.sessions.find((s) => s.id === payload.jti || s.userId === user.id);
+    const sess = await mem.findSession(user.id, payload.jti);
     if (sess && sess.revokedAt) {
       throw fail(401, "UNAUTHENTICATED", "Session revoked");
     }
@@ -139,15 +139,15 @@ authRouter.post("/refresh", (req, res, next) => {
   }
 });
 
-authRouter.get("/me", requireAuth, (req, res) => {
-  const user = mem.users.find((u) => u.id === req.user.id);
+authRouter.get("/me", requireAuth, async (req, res) => {
+  const user = await mem.findUser(req.user.id);
   res.json({ user: publicUser(user) });
 });
 
-authRouter.patch("/me", requireAuth, (req, res, next) => {
+authRouter.patch("/me", requireAuth, async (req, res, next) => {
   try {
     const body = profileSchema.parse(req.body);
-    const user = mem.users.find((u) => u.id === req.user.id);
+    const user = await mem.findUser(req.user.id);
     if (!user) throw fail(404, "NOT_FOUND", "User not found");
     if (body.name !== undefined) user.name = body.name;
     if (body.imageUrl !== undefined) user.imageUrl = body.imageUrl;
@@ -279,8 +279,8 @@ authRouter.post("/google", (req, res, next) => {
     // 2. Find or create user
     let user;
     try {
-      user = mem.users.find((u) => u.providers?.google?.sub === body.googleSub);
-      if (!user) user = mem.users.find((u) => u.email === body.email.toLowerCase());
+      user = await mem.findUser(null, body.googleSub);
+      if (!user) user = await mem.findUser(null, null, body.email);
     } catch (findErr) {
       console.error("[Google OAuth] Memory store search failed:", findErr);
     }
