@@ -19,7 +19,12 @@ export async function GET(request: Request) {
   const origin = `${protocol}://${host}`;
 
   // Use NEXT_PUBLIC_API_URL if set, otherwise default to the current origin (same-domain backend)
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || origin;
+  let apiBase = process.env.NEXT_PUBLIC_API_URL || origin;
+
+  // Force origin if we're on Vercel but apiBase points to localhost
+  if (host.includes("vercel.app") && apiBase.includes("localhost")) {
+    apiBase = origin;
+  }
 
   const pendingSupabaseCookies: Array<{ name: string; value: string; options?: CookieOptions }> = [];
 
