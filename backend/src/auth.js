@@ -74,7 +74,32 @@ function parseDevice(ua) {
   return { label: `${browser} on ${os}`, os, browser };
 }
 
-export function requireAuth(req, res, next) {
+// Helper to find a user in memory or fallback to DB
+async function findUser(userId) {
+  // 1. Try memory store first
+  let user = mem.users.find((u) => u.id === userId);
+  if (user) return user;
+
+  // 2. Fallback to DB if user is missing from memory (common in serverless cold starts)
+  if (pool) {
+    try {
+      const { toCamelCase, makePersistedObject } = await import("./store.js");
+      const res = await pool.query("SELECT * FROM users WHERE id = $1", [userId]);
+      if (res.rows[0]) {
+        const dbUser = toCamelCase(res.rows[0]);
+        // Add to memory store so subsequent requests are faster
+        const proxiedUser = makePersistedObject(dbUser, "users", "id");
+        mem.users.push(proxiedUser);
+        return proxiedUser;
+      }
+    } catch (dbErr) {
+      console.error("[auth] Fallback DB user lookup failed:", dbErr);
+    }
+  }
+  return null;
+}
+
+export async function requireAuth(req, res, next) {
   try {
     let token = req.cookies?.access_token;
     let payload = null;
@@ -83,7 +108,6 @@ export function requireAuth(req, res, next) {
       try {
         payload = jwt.verify(token, accessSecret());
       } catch (e) {
-        // access_token expired or invalid
         token = null;
       }
     }
@@ -95,7 +119,7 @@ export function requireAuth(req, res, next) {
         try {
           const refreshPayload = jwt.verify(refreshToken, refreshSecret());
           if (refreshPayload && refreshPayload.typ === "refresh" && refreshPayload.sub) {
-            const user = mem.users.find((u) => u.id === refreshPayload.sub);
+            const user = await findUser(refreshPayload.sub);
             if (user) {
               const sess = mem.sessions.find((s) => s.id === refreshPayload.jti || s.userId === user.id);
               if (!sess || !sess.revokedAt) {
@@ -113,7 +137,7 @@ export function requireAuth(req, res, next) {
       throw fail(401, "UNAUTHENTICATED", "Sign in required");
     }
 
-    const user = mem.users.find((u) => u.id === payload.sub);
+    const user = await findUser(payload.sub);
     if (!user) throw fail(401, "UNAUTHENTICATED", "Session user missing");
     req.user = { id: user.id, email: user.email, name: user.name, imageUrl: user.imageUrl };
     const sess = mem.sessions.find((s) => s.userId === user.id && !s.revokedAt);

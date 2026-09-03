@@ -90,15 +90,51 @@ filesRouter.put("/:id/bytes", requireAuth, async (req, res, next) => {
   try {
     assertWrite(req.user.id, "file", req.params.id);
     const file = getFile(req.params.id);
-    const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.from([]);
+    
+    // Ensure we handle the request body as a buffer
+    let buf = req.body;
+    if (!Buffer.isBuffer(buf)) {
+      // If it's a string or other type, convert to buffer
+      buf = typeof buf === 'string' ? Buffer.from(buf) : Buffer.from(JSON.stringify(buf));
+    }
+    
     file.sizeBytes = buf.length;
+    file.updatedAt = mem.now();
     const etag = `"${crypto.createHash("md5").update(buf).digest("hex")}"`;
 
-    // Cache the upload buffer in memory temporarily
-    tempUploads.set(file.id, buf);
-
+    // PERSISTENCE FIX FOR SERVERLESS: 
+    // Save the bytes directly to the database in this request.
+    // In serverless, the next "complete" request might hit a different instance.
     if (pool) {
-      await pool.query("UPDATE files SET size_bytes = $1 WHERE id = $2", [buf.length, file.id]);
+      await pool.query("UPDATE files SET size_bytes = $1, updated_at = $2 WHERE id = $3", [buf.length, file.updatedAt, file.id]);
+      
+      // Also update or create the version immediately so the data is safe
+      const existingVersion = mem.versions.find(v => v.fileId === file.id);
+      if (existingVersion) {
+        existingVersion.fileData = buf;
+        existingVersion.sizeBytes = buf.length;
+        await pool.query("UPDATE file_versions SET file_data = $1, size_bytes = $2 WHERE id = $3", [buf, buf.length, existingVersion.id]);
+      } else {
+        // Create initial version if it doesn't exist yet
+        const versionId = mem.id();
+        const newVersion = {
+          id: versionId,
+          fileId: file.id,
+          versionNumber: 1,
+          storageKey: file.storageKey,
+          sizeBytes: buf.length,
+          checksum: file.checksum,
+          fileData: buf,
+          createdAt: mem.now(),
+        };
+        mem.versions.push(newVersion);
+        file.versionId = versionId;
+        await pool.query("UPDATE files SET version_id = $1 WHERE id = $2", [versionId, file.id]);
+        // Note: mem.versions.push already triggers dbInsert if not isInitialLoad
+      }
+    } else {
+      // Fallback for memory-only mode
+      tempUploads.set(file.id, buf);
     }
 
     res.setHeader("etag", etag);
@@ -116,6 +152,7 @@ filesRouter.post("/complete", requireAuth, async (req, res, next) => {
     if (body.checksum) file.checksum = body.checksum;
     file.status = "ready";
     file.updatedAt = mem.now();
+
     // Detect if this should be a new version: if a prior "ready" file exists in
     // the same parent with the same name, archive its current version.
     if (file.folderId || file.folderId === null) {
@@ -129,6 +166,7 @@ filesRouter.post("/complete", requireAuth, async (req, res, next) => {
           !f.isDeleted,
       );
       if (prior) {
+        // Versioning logic...
         const version = {
           id: mem.id(),
           fileId: prior.id,
@@ -142,34 +180,25 @@ filesRouter.post("/complete", requireAuth, async (req, res, next) => {
         prior.versionId = version.id;
         prior.isDeleted = true;
         prior.deletedAt = mem.now();
-        const newVersion = {
-          id: mem.id(),
-          fileId: file.id,
-          versionNumber: 1,
-          storageKey: file.storageKey,
-          sizeBytes: file.sizeBytes,
-          checksum: file.checksum,
-          createdAt: mem.now(),
-        };
-        mem.versions.push(newVersion);
-        file.versionId = newVersion.id;
-        file.name = `${file.name.replace(/(\.[^.]+)?$/, "")} (v${Date.now()})${path.extname(file.name) || ""}`;
-      } else {
-        const version = {
-          id: mem.id(),
-          fileId: file.id,
-          versionNumber: 1,
-          storageKey: file.storageKey,
-          sizeBytes: file.sizeBytes,
-          checksum: file.checksum,
-          createdAt: mem.now(),
-        };
-        mem.versions.push(version);
-        file.versionId = version.id;
       }
     }
 
-    // Transfer cached upload buffer to the newly created version
+    // Ensure the current file has a version if one wasn't created in /bytes
+    if (!file.versionId) {
+      const version = {
+        id: mem.id(),
+        fileId: file.id,
+        versionNumber: 1,
+        storageKey: file.storageKey,
+        sizeBytes: file.sizeBytes,
+        checksum: file.checksum,
+        createdAt: mem.now(),
+      };
+      mem.versions.push(version);
+      file.versionId = version.id;
+    }
+
+    // Transfer cached upload buffer to the newly created version (Memory-only fallback)
     const buf = tempUploads.get(file.id);
     if (buf) {
       const activeVersion = mem.versions.find((v) => v.id === file.versionId);
@@ -180,6 +209,10 @@ filesRouter.post("/complete", requireAuth, async (req, res, next) => {
         }
       }
       tempUploads.delete(file.id);
+    }
+
+    if (pool) {
+      await pool.query("UPDATE files SET status = $1, updated_at = $2, checksum = $3 WHERE id = $4", ["ready", file.updatedAt, file.checksum, file.id]);
     }
 
     logActivity(req.user.id, "upload", "file", file.id, { name: file.name, sizeBytes: file.sizeBytes });
