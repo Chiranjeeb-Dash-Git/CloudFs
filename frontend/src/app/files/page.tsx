@@ -139,6 +139,7 @@ export default function FilesPage() {
 
               <div className="relative flex items-center justify-between">
                 <span className="text-[11px] font-mono uppercase tracking-[0.25em]" style={{ color: "var(--ink-soft)" }}>Library overview</span>
+                {/* @ts-ignore */}
                 <iconify-icon icon="solar:chart-square-linear" className="text-2xl" style={{ color: "var(--primary)" }} />
               </div>
 
@@ -163,6 +164,7 @@ export default function FilesPage() {
                   <span className="text-[10px] font-mono tracking-widest" style={{ color: "var(--ink-soft)" }}>N° 02</span>
                   <h3 className="font-display italic text-2xl font-normal tracking-tight mt-0.5" style={{ color: "var(--ink)" }}>Images</h3>
                 </div>
+                {/* @ts-ignore */}
                 <iconify-icon icon="solar:pallete-2-linear" className="text-xl" style={{ color: "var(--primary)" }} />
               </div>
               <span className="relative text-xs font-mono" style={{ color: "var(--ink-soft)" }}>{imageFiles.length} files · {formatBytes(imageSize)}</span>
@@ -176,8 +178,9 @@ export default function FilesPage() {
               <div className="relative flex items-start justify-between">
                 <div>
                   <span className="text-[10px] font-mono tracking-widest" style={{ color: "var(--ink-soft)" }}>N° 03</span>
-                  <h3 className="font-display italic text-2xl font-normal tracking-tight mt-0.5" style={{ color: "var(--ink)" }}>Videos</h3>
+                  <h3 className="font-display italic text-2xl font-normal tracking-tight mt-0.5" style={{ color: "var(--ink)" }}>Gallery</h3>
                 </div>
+                {/* @ts-ignore */}
                 <iconify-icon icon="solar:gallery-wide-linear" className="text-xl" style={{ color: "var(--primary)" }} />
               </div>
               <span className="relative text-xs font-mono" style={{ color: "var(--ink-soft)" }}>{videoFiles.length} files · {formatBytes(videoSize)}</span>
@@ -190,6 +193,7 @@ export default function FilesPage() {
               <div className="art-orb" style={{ width: "100px", height: "100px", top: "-25px", left: "-25px", background: "radial-gradient(circle, var(--primary) 0%, transparent 70%)", opacity: 0.3 }} />
               <div className="relative flex items-start justify-between">
                 <span className="text-[10px] font-mono tracking-widest" style={{ color: "var(--ink-soft)" }}>N° 04</span>
+                {/* @ts-ignore */}
                 <iconify-icon icon="solar:videocamera-record-linear" className="text-xl" style={{ color: "var(--primary)" }} />
               </div>
               <div className="relative">
@@ -205,6 +209,7 @@ export default function FilesPage() {
               <div className="art-orb" style={{ width: "100px", height: "100px", top: "-25px", right: "-25px", background: "radial-gradient(circle, var(--gold) 0%, transparent 70%)", opacity: 0.3, animationDelay: "-3s" }} />
               <div className="relative flex items-start justify-between">
                 <span className="text-[10px] font-mono tracking-widest" style={{ color: "var(--ink-soft)" }}>N° 05</span>
+                {/* @ts-ignore */}
                 <iconify-icon icon="solar:document-text-linear" className="text-xl" style={{ color: "var(--primary)" }} />
               </div>
               <div className="relative">
@@ -220,6 +225,7 @@ export default function FilesPage() {
               <div className="art-orb" style={{ width: "110px", height: "110px", bottom: "-30px", right: "-20px", background: "radial-gradient(circle, var(--primary) 0%, transparent 70%)", opacity: 0.3, animationDelay: "-8s" }} />
               <div className="relative flex items-start justify-between">
                 <span className="text-[10px] font-mono tracking-widest" style={{ color: "var(--ink-soft)" }}>N° 06</span>
+                {/* @ts-ignore */}
                 <iconify-icon icon="solar:music-note-3-linear" className="text-xl" style={{ color: "var(--primary)" }} />
               </div>
               <div className="relative">
@@ -255,6 +261,7 @@ export default function FilesPage() {
                 <span className="text-xs font-mono" style={{ color: "var(--ink-soft)" }}>Drop files into CloudFS</span>
               </div>
               <div className="relative w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "var(--primary)" }}>
+                {/* @ts-ignore */}
                 <iconify-icon icon="solar:arrow-right-up-linear" className="text-white text-xl" />
               </div>
             </button>
@@ -270,6 +277,7 @@ export default function FilesPage() {
                 <span className="text-xs font-mono" style={{ color: "var(--ink-soft)" }}>{recentToday.length} files touched today</span>
               </div>
               <div className="relative w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "var(--primary)" }}>
+                {/* @ts-ignore */}
                 <iconify-icon icon="solar:clock-circle-linear" className="text-white text-xl" />
               </div>
             </div>

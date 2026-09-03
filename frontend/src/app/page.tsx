@@ -40,6 +40,7 @@ export default function LandingPage() {
       <main className="relative z-10 mx-auto flex min-h-screen w-full max-w-[1920px] flex-col justify-between px-6 py-10 md:px-16 md:py-16">
         <nav className="z-20 flex w-full items-center justify-between">
           <Link href="/" className="group flex cursor-pointer items-center gap-2.5 text-white">
+            {/* @ts-ignore */}
             <iconify-icon icon="solar:cloud-linear" className="text-xl text-white/80 transition-colors group-hover:text-white md:text-2xl" />
             <span className="text-sm font-medium tracking-wide md:text-base">CloudFS</span>
           </Link>
@@ -51,11 +52,13 @@ export default function LandingPage() {
             >
               Access Console
               <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/5 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
+              {/* @ts-ignore */}
               <iconify-icon icon="solar:arrow-right-linear" className="text-base -translate-x-2 opacity-0 transition-all duration-300 group-hover:translate-x-0 group-hover:opacity-100" />
             </Link>
           </div>
 
           <button className="cursor-pointer text-white/80 md:hidden" aria-label="Menu" onClick={() => setMenu((v) => !v)}>
+            {/* @ts-ignore */}
             <iconify-icon icon="solar:hamburger-menu-linear" className="text-2xl" />
           </button>
         </nav>

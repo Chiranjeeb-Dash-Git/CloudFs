@@ -44,6 +44,7 @@ export function GoogleSignInButton() {
           <span className="font-mono text-xs tracking-widest text-[#f4f4f5]/80 animate-pulse">CONNECTING TO GOOGLE...</span>
         ) : (
           <>
+            {/* @ts-ignore */}
             <iconify-icon icon="logos:google-icon" style={{ fontSize: "18px" }} />
             <span className="text-[#f4f4f5]/90">Continue with Google</span>
           </>

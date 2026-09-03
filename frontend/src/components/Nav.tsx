@@ -63,6 +63,7 @@ export function Nav({ theme = "mono", showUpload = true }: { theme?: "nexacore" 
     <nav className={`mb-16 flex w-full items-center justify-between ${theme === "studio" ? "text-white" : ""}`}>
       <Link href="/" className="flex items-center gap-2.5">
         {theme === "studio" ? (
+          /* @ts-ignore */
           <iconify-icon icon="solar:cloud-linear" className="text-2xl text-white/85" />
         ) : (
           <Cloud className="size-5 opacity-85" strokeWidth={1.4} />
@@ -109,14 +110,15 @@ export function Nav({ theme = "mono", showUpload = true }: { theme?: "nexacore" 
         {showUpload ? (
           <button
             onClick={() => ui.openUpload()}
-            className={`flex items-center gap-2 rounded-full px-6 py-3 text-sm font-medium transition-transform duration-500 hover:-translate-y-0.5 ${
-              theme === "studio"
-                ? "accent-btn text-white"
-                : "sheen relative overflow-hidden border border-hairline bg-secondary"
-            }`}
+            className={theme === "studio" ? "studio-btn-primary px-4 py-2 text-xs flex items-center gap-2" : "sheen relative flex h-[38px] items-center gap-2 overflow-hidden rounded-full border border-hairline bg-secondary px-4 text-xs font-medium transition-transform duration-500 hover:-translate-y-0.5"}
           >
-            {theme === "studio" ? <iconify-icon icon="solar:upload-linear" /> : <Upload className="relative z-10 size-4" strokeWidth={1.6} />}
-            <span className="relative z-10">Upload{theme === "studio" ? "" : " Files"}</span>
+            {theme === "studio" ? (
+              /* @ts-ignore */
+              <iconify-icon icon="solar:upload-linear" />
+            ) : (
+              <Upload className="relative z-10 size-4" strokeWidth={1.6} />
+            )}
+            <span className="relative z-10">Upload</span>
           </button>
         ) : null}
         {theme !== "studio" ? (
