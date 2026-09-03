@@ -178,17 +178,6 @@ authRouter.post("/change-password", requireAuth, async (req, res, next) => {
   }
 });
 
-// Google OAuth scaffold. In production, validate the id_token against Google's
-// tokeninfo endpoint and link by `sub`. For the in-memory MVP we accept a
-// verified token shape from a trusted caller (e.g. Supabase or a Google client
-// that has already verified it) and create/link the user.
-const googleSchema = z.object({
-  email: z.string().email(),
-  name: z.string().min(1).max(120).optional().nullable(),
-  imageUrl: z.string().url().optional().nullable(),
-  googleSub: z.string().min(1),
-});
-
 // ─── 2FA (TOTP) — spec §8 ───────────────────────────────────────────────────
 // Two-step flow: enable → confirm → disable
 const twoFactorCodeSchema = z.object({ code: z.string().regex(/^\d{6}$/) });
@@ -258,7 +247,14 @@ authRouter.post("/2fa/disable", requireAuth, (req, res, next) => {
   }
 });
 
-// ─── Google OAuth scaffold ──────────────────────────────────────────────────
+// Google OAuth scaffold
+const googleSchema = z.object({
+  email: z.string().email(),
+  name: z.string().max(200).optional().nullable(),
+  imageUrl: z.string().max(1000).optional().nullable(),
+  googleSub: z.string().min(1),
+});
+
 authRouter.post("/google", (req, res, next) => {
   const startAt = Date.now();
   const incoming = {
@@ -267,10 +263,15 @@ authRouter.post("/google", (req, res, next) => {
     imageUrl: req.body?.imageUrl,
     googleSub: req.body?.googleSub,
   };
+
   try {
+    // 1. Validate payload
     const body = googleSchema.parse(incoming);
+    
+    // 2. Find or create user
     let user = mem.users.find((u) => u.providers?.google?.sub === body.googleSub);
     if (!user) user = mem.users.find((u) => u.email === body.email.toLowerCase());
+    
     const isNewUser = !user;
     if (!user) {
       user = {
@@ -287,29 +288,31 @@ authRouter.post("/google", (req, res, next) => {
       };
       mem.users.push(user);
     } else {
+      // Update existing user with latest Google info
       user.providers = { ...(user.providers || {}), google: { sub: body.googleSub, email: body.email.toLowerCase() } };
       if (body.imageUrl) user.imageUrl = body.imageUrl;
       if (body.name) user.name = body.name;
     }
-    issueSession(res, req, user);
+
+    // 3. Issue session
+    try {
+      issueSession(res, req, user);
+    } catch (sessionErr) {
+      console.error("[Google OAuth] Session issuance failed:", sessionErr);
+      throw fail(500, "SESSION_ERROR", "Failed to create your login session");
+    }
+
     const durationMs = Date.now() - startAt;
-    console.log(
-      `[Google OAuth] ${isNewUser ? "CREATED" : "LOGGED IN"} user=${user.id} email=${user.email} durationMs=${durationMs}`
-    );
+    console.log(`[Google OAuth] SUCCESS ${isNewUser ? "CREATED" : "LOGGED IN"} user=${user.id} duration=${durationMs}ms`);
+    
     res.json({ user: publicUser(user) });
   } catch (err) {
     const durationMs = Date.now() - startAt;
     if (err.name === "ZodError") {
-      const issue = err.errors?.[0];
-      console.error(
-        `[Google OAuth] Zod validation FAIL (${durationMs}ms) path=${issue?.path?.join(".")} msg=${issue?.message} payload=`,
-        JSON.stringify(incoming)
-      );
-      return next(
-        fail(400, "VALIDATION", issue?.message ?? `Invalid payload (${issue?.path?.join(".") ?? "unknown"})`)
-      );
+      console.error(`[Google OAuth] Validation failed:`, err.errors);
+      return next(fail(400, "VALIDATION", "Invalid data received from Google"));
     }
-    console.error(`[Google OAuth] FAIL durationMs=${durationMs} err=`, err);
+    console.error(`[Google OAuth] Critical failure (${durationMs}ms):`, err);
     next(err);
   }
 });

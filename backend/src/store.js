@@ -311,9 +311,6 @@ if (process.env.DATABASE_URL) {
       // Ensure file_data bytea column exists in file_versions for database storage
       await pool.query("ALTER TABLE file_versions ADD COLUMN IF NOT EXISTS file_data bytea");
 
-      // Update all users' default quota to 500 MB (524288000 bytes) to match Supabase database tier capacity
-      await pool.query("UPDATE users SET quota_bytes = 524288000");
-
       // 3. Load records from DB into local cache
       const tables = [
         { key: "users", name: "users", pk: "id" },
