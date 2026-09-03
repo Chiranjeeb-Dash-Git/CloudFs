@@ -5,14 +5,21 @@ import { NextResponse } from "next/server";
 const AUTH_CALLBACK_TIMEOUT_MS = 10_000;
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/dashboard";
 
   const cookieStore = await cookies();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+
+  // Determine origin and API base URL
+  const host = request.headers.get("host") || new URL(request.url).host;
+  const protocol = request.headers.get("x-forwarded-proto") || "http";
+  const origin = `${protocol}://${host}`;
+
+  // Use NEXT_PUBLIC_API_URL if set, otherwise default to the current origin (same-domain backend)
+  const apiBase = process.env.NEXT_PUBLIC_API_URL || origin;
 
   const pendingSupabaseCookies: Array<{ name: string; value: string; options?: CookieOptions }> = [];
 

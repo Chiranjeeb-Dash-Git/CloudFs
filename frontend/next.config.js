@@ -12,8 +12,16 @@ const nextConfig = {
     ],
   },
   async rewrites() {
-    const api = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-    return [{ source: "/api/:path*", destination: `${api}/api/:path*` }];
+    // If an external API URL is provided, rewrite /api to it.
+    if (process.env.NEXT_PUBLIC_API_URL) {
+      return [{ source: "/api/:path*", destination: `${process.env.NEXT_PUBLIC_API_URL}/api/:path*` }];
+    }
+    // In local development, default to the Express backend on 8080 if no URL is provided.
+    if (process.env.NODE_ENV === "development") {
+      return [{ source: "/api/:path*", destination: "http://localhost:8080/api/:path*" }];
+    }
+    // In production (Vercel), vercel.json handles the /api -> /api/index.js rewrite.
+    return [];
   },
   webpack: (config) => {
     config.resolve.alias = {
