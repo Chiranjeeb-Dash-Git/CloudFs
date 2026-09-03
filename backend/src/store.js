@@ -274,31 +274,37 @@ if (process.env.DATABASE_URL) {
   async function connectAndSync() {
     isInitialLoad = true;
     try {
+      if (!pool) return;
+
       // 1. Skip heavy schema sync in production/Vercel to prevent timeouts
       const isVercel = !!process.env.VERCEL;
       
       if (!isVercel) {
-        const schemaPath = path.join(__dirname, "../sql/schema.sql");
-        if (fs.existsSync(schemaPath)) {
-          const schemaSql = fs.readFileSync(schemaPath, "utf8");
-          try {
+        try {
+          const schemaPath = path.join(__dirname, "../sql/schema.sql");
+          if (fs.existsSync(schemaPath)) {
+            const schemaSql = fs.readFileSync(schemaPath, "utf8");
             await pool.query(schemaSql);
             console.log("PostgreSQL schema synchronized.");
-          } catch (schemaErr) {
-            console.warn("Schema sync warning:", schemaErr.message);
           }
+        } catch (schemaErr) {
+          console.warn("Schema sync skipped/failed:", schemaErr.message);
         }
       }
 
       // 2. Ensure critical tables exist (fast check)
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS refresh_tokens (
-          token TEXT PRIMARY KEY,
-          user_id UUID,
-          jti TEXT,
-          created_at TIMESTAMPTZ DEFAULT NOW()
-        )
-      `);
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS refresh_tokens (
+            token TEXT PRIMARY KEY,
+            user_id UUID,
+            jti TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `);
+      } catch (e) {
+        console.warn("Table check failed:", e.message);
+      }
 
       // Ensure file_data bytea column exists in file_versions for database storage
       await pool.query("ALTER TABLE file_versions ADD COLUMN IF NOT EXISTS file_data bytea");

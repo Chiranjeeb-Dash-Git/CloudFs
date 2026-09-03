@@ -115,13 +115,17 @@ export async function GET(request: Request) {
         backendOk = true;
         return finalRes;
       } else {
+        const text = await backendRes.text();
         let body: any = null;
         try {
-          body = await backendRes.json();
-        } catch {}
+          body = JSON.parse(text);
+        } catch {
+          console.error("[auth/callback] Backend returned non-JSON response:", text.slice(0, 200));
+        }
+        
         console.error(
           `[auth/callback] backend bridge returned non-OK status=${backendRes.status} statusText=${backendRes.statusText} body=`,
-          body
+          body || text.slice(0, 100)
         );
         const detailCode = body?.error?.code ? `${backendRes.status}-${body.error.code}` : String(backendRes.status);
         return redirectWithError(`auth-backend-bridge-${detailCode}`);

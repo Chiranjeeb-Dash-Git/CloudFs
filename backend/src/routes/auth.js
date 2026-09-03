@@ -257,16 +257,24 @@ const googleSchema = z.object({
 
 authRouter.post("/google", (req, res, next) => {
   const startAt = Date.now();
-  const incoming = {
-    email: req.body?.email,
-    name: req.body?.name,
-    imageUrl: req.body?.imageUrl,
-    googleSub: req.body?.googleSub,
-  };
-
+  
+  // Wrap entire route in try/catch to prevent ANY unhandled crash
   try {
+    const incoming = {
+      email: req.body?.email,
+      name: req.body?.name,
+      imageUrl: req.body?.imageUrl,
+      googleSub: req.body?.googleSub,
+    };
+
     // 1. Validate payload
-    const body = googleSchema.parse(incoming);
+    let body;
+    try {
+      body = googleSchema.parse(incoming);
+    } catch (zodErr) {
+      console.error(`[Google OAuth] Validation failed:`, zodErr.errors);
+      return res.status(400).json({ error: { code: "VALIDATION", message: "Invalid data from Google" } });
+    }
     
     // 2. Find or create user
     let user;
@@ -295,13 +303,18 @@ authRouter.post("/google", (req, res, next) => {
         mem.users.push(user);
       } catch (pushErr) {
         console.error("[Google OAuth] Failed to save user to store:", pushErr);
-        throw fail(500, "STORAGE_ERROR", "Could not save user profile");
+        // Don't crash, just log and continue if possible or fail gracefully
+        return res.status(500).json({ error: { code: "STORAGE_ERROR", message: "Could not create user profile" } });
       }
     } else {
       // Update existing user with latest Google info
-      user.providers = { ...(user.providers || {}), google: { sub: body.googleSub, email: body.email.toLowerCase() } };
-      if (body.imageUrl) user.imageUrl = body.imageUrl;
-      if (body.name) user.name = body.name;
+      try {
+        user.providers = { ...(user.providers || {}), google: { sub: body.googleSub, email: body.email.toLowerCase() } };
+        if (body.imageUrl) user.imageUrl = body.imageUrl;
+        if (body.name) user.name = body.name;
+      } catch (updateErr) {
+        console.error("[Google OAuth] Failed to update user metadata:", updateErr);
+      }
     }
 
     // 3. Issue session
@@ -309,20 +322,15 @@ authRouter.post("/google", (req, res, next) => {
       issueSession(res, req, user);
     } catch (sessionErr) {
       console.error("[Google OAuth] Session issuance failed:", sessionErr);
-      throw fail(500, "SESSION_ERROR", "Failed to create your login session");
+      return res.status(500).json({ error: { code: "SESSION_ERROR", message: "Failed to create your login session" } });
     }
 
     const durationMs = Date.now() - startAt;
     console.log(`[Google OAuth] SUCCESS ${isNewUser ? "CREATED" : "LOGGED IN"} user=${user.id} duration=${durationMs}ms`);
     
-    res.json({ user: publicUser(user) });
-  } catch (err) {
-    const durationMs = Date.now() - startAt;
-    if (err.name === "ZodError") {
-      console.error(`[Google OAuth] Validation failed:`, err.errors);
-      return next(fail(400, "VALIDATION", "Invalid data received from Google"));
-    }
-    console.error(`[Google OAuth] Critical failure (${durationMs}ms):`, err);
-    next(err);
+    return res.json({ user: publicUser(user) });
+  } catch (criticalErr) {
+    console.error(`[Google OAuth] Critical crash:`, criticalErr);
+    return res.status(500).json({ error: { code: "INTERNAL_CRASH", message: "An unexpected error occurred" } });
   }
 });
