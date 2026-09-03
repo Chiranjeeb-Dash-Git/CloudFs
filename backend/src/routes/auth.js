@@ -184,8 +184,8 @@ authRouter.post("/change-password", requireAuth, async (req, res, next) => {
 // that has already verified it) and create/link the user.
 const googleSchema = z.object({
   email: z.string().email(),
-  name: z.string().min(1).max(120).optional(),
-  imageUrl: z.string().url().optional(),
+  name: z.string().min(1).max(120).optional().nullable(),
+  imageUrl: z.string().url().optional().nullable(),
   googleSub: z.string().min(1),
 });
 
@@ -260,10 +260,18 @@ authRouter.post("/2fa/disable", requireAuth, (req, res, next) => {
 
 // ─── Google OAuth scaffold ──────────────────────────────────────────────────
 authRouter.post("/google", (req, res, next) => {
+  const startAt = Date.now();
+  const incoming = {
+    email: req.body?.email,
+    name: req.body?.name,
+    imageUrl: req.body?.imageUrl,
+    googleSub: req.body?.googleSub,
+  };
   try {
-    const body = googleSchema.parse(req.body);
+    const body = googleSchema.parse(incoming);
     let user = mem.users.find((u) => u.providers?.google?.sub === body.googleSub);
     if (!user) user = mem.users.find((u) => u.email === body.email.toLowerCase());
+    const isNewUser = !user;
     if (!user) {
       user = {
         id: mem.id(),
@@ -284,9 +292,24 @@ authRouter.post("/google", (req, res, next) => {
       if (body.name) user.name = body.name;
     }
     issueSession(res, req, user);
+    const durationMs = Date.now() - startAt;
+    console.log(
+      `[Google OAuth] ${isNewUser ? "CREATED" : "LOGGED IN"} user=${user.id} email=${user.email} durationMs=${durationMs}`
+    );
     res.json({ user: publicUser(user) });
   } catch (err) {
-    if (err.name === "ZodError") return next(fail(400, "VALIDATION", err.errors[0]?.message ?? "Invalid payload"));
+    const durationMs = Date.now() - startAt;
+    if (err.name === "ZodError") {
+      const issue = err.errors?.[0];
+      console.error(
+        `[Google OAuth] Zod validation FAIL (${durationMs}ms) path=${issue?.path?.join(".")} msg=${issue?.message} payload=`,
+        JSON.stringify(incoming)
+      );
+      return next(
+        fail(400, "VALIDATION", issue?.message ?? `Invalid payload (${issue?.path?.join(".") ?? "unknown"})`)
+      );
+    }
+    console.error(`[Google OAuth] FAIL durationMs=${durationMs} err=`, err);
     next(err);
   }
 });

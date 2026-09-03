@@ -330,7 +330,12 @@ if (process.env.DATABASE_URL) {
       ];
 
       for (const t of tables) {
-        const res = await pool.query(`SELECT * FROM ${t.name}`);
+        // Exclude file_data from initial load to save memory and improve startup time
+        const query = t.name === "file_versions" 
+          ? "SELECT id, file_id, version_number, storage_key, size_bytes, checksum, created_at FROM file_versions"
+          : `SELECT * FROM ${t.name}`;
+          
+        const res = await pool.query(query);
         for (const row of res.rows) {
           const item = toCamelCase(row);
           const proxiedItem = makePersistedObject(item, t.name, t.pk);

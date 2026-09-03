@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -79,11 +79,23 @@ export default function DashboardPage() {
     refetchInterval: 15_000,
   });
 
+  const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
+
   useEffect(() => {
-    if (meError) {
-      router.push("/login");
+    if (meError && redirectCountdown === null) {
+      setRedirectCountdown(3);
     }
-  }, [meError, router]);
+  }, [meError, redirectCountdown]);
+
+  useEffect(() => {
+    if (redirectCountdown === null) return;
+    if (redirectCountdown <= 0) {
+      router.replace("/login");
+      return;
+    }
+    const t = setTimeout(() => setRedirectCountdown((c) => (c === null ? null : c - 1)), 1000);
+    return () => clearTimeout(t);
+  }, [redirectCountdown, router]);
 
   const user = meData?.user;
   const storage = storageData;
@@ -93,6 +105,29 @@ export default function DashboardPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[oklch(0.05_0_0)] text-white">
         <div className="font-mono text-sm tracking-widest animate-pulse">LOADING CONTROL ROOM...</div>
+      </div>
+    );
+  }
+
+  if (meError) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-[oklch(0.05_0_0)] px-6 text-center text-white">
+        <div className="font-mono text-[11px] tracking-widest text-white/50 uppercase">CloudFS · Auth</div>
+        <h1 className="text-4xl font-light tracking-tight">You are not signed in</h1>
+        <p className="max-w-md text-sm text-white/60">
+          {meError?.message || "Your session could not be verified."}
+        </p>
+        <p className="max-w-md text-xs text-white/40 font-mono">
+          Redirecting to sign-in in {redirectCountdown}s...
+        </p>
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-3">
+          <button
+            onClick={() => router.replace("/login")}
+            className="rounded-full border border-white/10 bg-white/[0.03] px-5 py-2.5 text-sm transition-colors hover:bg-white/5"
+          >
+            Sign in now
+          </button>
+        </div>
       </div>
     );
   }
@@ -125,7 +160,7 @@ export default function DashboardPage() {
             </div>
 
             <button
-              onClick={ui.openUpload}
+              onClick={() => ui.openUpload()}
               className="sheen relative flex h-[52px] shrink-0 items-center gap-2 overflow-hidden rounded-full border border-hairline bg-secondary px-6 text-sm font-medium transition-transform duration-500 hover:-translate-y-0.5"
             >
               <Upload className="relative z-10 size-4" strokeWidth={1.6} />
@@ -147,13 +182,13 @@ export default function DashboardPage() {
                   </div>
                   <div className="mt-6 flex gap-2">
                     <button
-                      onClick={ui.openFolder}
+                      onClick={() => ui.openFolder()}
                       className="flex flex-1 items-center justify-center gap-2 rounded-full border border-hairline bg-surface-2 px-4 py-2.5 text-xs transition-colors duration-300 hover:bg-accent"
                     >
                       <FolderPlus className="size-3.5" strokeWidth={1.5} /> New Folder
                     </button>
                     <button
-                      onClick={ui.openShare}
+                      onClick={() => ui.openShare()}
                       className="flex flex-1 items-center justify-center gap-2 rounded-full border border-hairline bg-surface-2 px-4 py-2.5 text-xs transition-colors duration-300 hover:bg-accent"
                     >
                       <Share2 className="size-3.5" strokeWidth={1.5} /> Share

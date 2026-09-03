@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+const API_BASE = ""; // Relative path to use Next.js proxy (fixes cookie issues for cross-origin media)
 
 export type ApiError = { error: { code: string; message: string } };
 
@@ -118,7 +118,13 @@ export const api = {
     request<{ links: any[] }>("/api/links"),
   deleteLink: (id: string) =>
     request(`/api/link-shares/${id}`, { method: "DELETE" }),
-  downloadUrl: (id: string) => `${API_BASE}/api/files/${id}/download`,
+  downloadUrl: (id: string) => `/api/files/${id}/download`,
+  thumbnailUrl: (id: string) => `/api/files/${id}/thumbnail`,
+  publicDownloadUrl: (id: string, token: string, password?: string) => {
+    const params = new URLSearchParams({ token });
+    if (password) params.set("password", password);
+    return `/api/files/${id}/public-download?${params.toString()}`;
+  },
   searchAdvanced: (params: { q?: string; type?: string; owner?: string; sort?: string; order?: string }) => {
     const query = new URLSearchParams();
     if (params.q) query.append("q", params.q);

@@ -26,9 +26,9 @@ export function WaveTerrain() {
     camera.position.set(0, 9, 24);
     camera.lookAt(0, 0, -12);
 
-    const COLS = 110;
-    const ROWS = 110;
-    const SPACING = 0.85;
+    const COLS = 60;
+    const ROWS = 60;
+    const SPACING = 1.6;
     const count = COLS * ROWS;
     const positions = new Float32Array(count * 3);
     const alphas = new Float32Array(count);

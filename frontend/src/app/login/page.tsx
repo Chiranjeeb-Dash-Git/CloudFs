@@ -1,18 +1,40 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { api } from "@/lib/api";
 import { WaveTerrain } from "@/components/WaveTerrain";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 
-export default function LoginPage() {
+const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  "auth-missing-code": "Google sign-in returned without an authorization code. Please try again.",
+  "auth-supabase-not-configured": "Supabase is not configured on this server. Ask your admin to set NEXT_PUBLIC_SUPABASE_URL / ANON_KEY.",
+  "auth-exchange-failed": "Google sign-in token exchange failed. This can happen if the link expired — please try again.",
+  "auth-no-user": "Google sign-in completed but no user profile could be loaded. Please try again.",
+  "auth-backend-bridge-failed": "Google authenticated you, but your local drive session could not be started. Is the backend API running on port 8080?",
+  "auth-backend-bridge-unreachable": "Could not reach the CloudFS backend on port 8080. Start the backend (`cd backend && npm run dev`) then try again.",
+  "auth-backend-bridge-timeout": "The CloudFS backend took too long to respond (over 10s). Check that the backend is running, then try again.",
+  "auth-unexpected": "An unexpected error occurred during sign-in. Please try again.",
+  "auth-unknown": "Sign-in failed without a specific reason. Please try again.",
+  "auth-callback-failed": "Sign-in callback failed. Please try again.",
+};
+
+function LoginPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const code = searchParams.get("error");
+    if (code) {
+      const message = AUTH_ERROR_MESSAGES[code] ?? `Sign-in error: ${code}`;
+      setError(message);
+    }
+  }, [searchParams]);
 
   return (
     <div className="theme-mono relative min-h-screen text-foreground">
@@ -75,5 +97,17 @@ export default function LoginPage() {
         </p>
       </main>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-[oklch(0.05_0_0)] text-white/60">
+        <div className="font-mono text-xs tracking-widest animate-pulse">LOADING...</div>
+      </div>
+    }>
+      <LoginPageInner />
+    </Suspense>
   );
 }

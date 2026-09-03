@@ -237,10 +237,29 @@ filesRouter.get("/:id", requireAuth, (req, res, next) => {
   }
 });
 
-filesRouter.get("/:id/download", requireAuth, async (req, res, next) => {
+filesRouter.get("/:id/download", async (req, res, next) => {
   try {
-    assertRead(req.user.id, "file", req.params.id);
-    const file = getFile(req.params.id);
+    const file = mem.files.find((x) => x.id === req.params.id && !x.isDeleted);
+    if (!file) throw fail(404, "NOT_FOUND", "File not found");
+
+    // Allow access if either authenticated OR valid signed URL token is present
+    let hasAccess = false;
+    try {
+      requireAuth(req, res, () => { hasAccess = true; });
+    } catch (e) {
+      // Not authenticated, check signed token
+    }
+
+    if (!hasAccess) {
+      const { exp, sig } = req.query;
+      if (!verifySignedUrlToken(file.id, exp, sig)) {
+        throw fail(401, "UNAUTHENTICATED", "Sign in required or invalid link");
+      }
+      hasAccess = true;
+    }
+
+    if (!hasAccess) throw fail(401, "UNAUTHENTICATED", "Sign in required");
+    assertRead(req.user?.id || file.ownerId, "file", req.params.id);
 
     // Try in-memory cache first, then query database
     const version = mem.versions.find((v) => v.fileId === file.id);
@@ -309,11 +328,33 @@ filesRouter.get("/:id/public-download", async (req, res, next) => {
   }
 });
 
-filesRouter.get("/:id/thumbnail", requireAuth, async (req, res, next) => {
+filesRouter.get("/:id/thumbnail", async (req, res, next) => {
   try {
-    assertRead(req.user.id, "file", req.params.id);
-    const file = getFile(req.params.id);
+    const file = mem.files.find((x) => x.id === req.params.id && !x.isDeleted);
     if (!file) throw fail(404, "NOT_FOUND", "File not found");
+
+    // Allow access if either authenticated OR valid signed URL token is present
+    let hasAccess = false;
+    try {
+      requireAuth(req, res, () => { hasAccess = true; });
+    } catch (e) {
+      // Not authenticated
+    }
+
+    if (!hasAccess) {
+      const { exp, sig } = req.query;
+      if (!verifySignedUrlToken(file.id, exp, sig)) {
+        // Fallback to placeholder for thumbnails if not signed/auth
+        return res.json({
+          kind: "placeholder",
+          mimeType: file.mimeType,
+          sizeBytes: file.sizeBytes,
+          label: path.extname(file.name).replace(".", "").toUpperCase() || "FILE",
+        });
+      }
+    }
+
+    assertRead(req.user?.id || file.ownerId, "file", req.params.id);
 
     const version = mem.versions.find((v) => v.fileId === file.id);
     let data = version?.fileData;

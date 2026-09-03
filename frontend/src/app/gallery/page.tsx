@@ -201,20 +201,20 @@ function FileThumbnail({ fileId, type, name, seed }: { fileId: string; type: str
     let objectUrl: string | null = null;
 
     async function load() {
-      try {
-        const res = await fetch(`${API_BASE}/api/files/${fileId}/thumbnail`, {
-          credentials: "include",
-        });
-        if (!res.ok) throw new Error("failed");
-        
-        const contentType = res.headers.get("content-type") || "";
-        if (contentType.includes("application/json")) {
-          // If the thumbnail is a JSON placeholder, fallback to the full download URL
-          if (active) {
-            setSrc(`${API_BASE}/api/files/${fileId}/download`);
-          }
-          return;
+    try {
+      const res = await fetch(`/api/files/${fileId}/thumbnail`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("failed");
+
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        // If the thumbnail is a JSON placeholder, fallback to the full download URL
+        if (active) {
+          setSrc(`/api/files/${fileId}/download`);
         }
+        return;
+      }
 
         const blob = await res.blob();
         if (active) {
@@ -224,7 +224,7 @@ function FileThumbnail({ fileId, type, name, seed }: { fileId: string; type: str
       } catch (err) {
         if (active) {
           // Fallback to full download URL on error or if no thumbnail exists
-          setSrc(`${API_BASE}/api/files/${fileId}/download`);
+          setSrc(`/api/files/${fileId}/download`);
         }
       }
     }
@@ -244,7 +244,7 @@ function FileThumbnail({ fileId, type, name, seed }: { fileId: string; type: str
   }
 
   if (type === "video") {
-    const downloadUrl = `${API_BASE}/api/files/${fileId}/download`;
+    const downloadUrl = `/api/files/${fileId}/download`;
     return (
       <div 
         className="w-full h-full relative"
@@ -270,7 +270,7 @@ function FileThumbnail({ fileId, type, name, seed }: { fileId: string; type: str
   }
 
   if (type === "pdf") {
-    const downloadUrl = `${API_BASE}/api/files/${fileId}/download?inline=true`;
+    const downloadUrl = `/api/files/${fileId}/download?inline=true`;
     return (
       <div className="w-full h-full overflow-hidden bg-white relative pointer-events-none select-none">
         <iframe 
@@ -321,8 +321,7 @@ function FileModalViewer({ file }: { file: FileItem }) {
 
     async function load() {
       try {
-        const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
-        const res = await fetch(`${API_BASE}/api/files/${file.id}/download?inline=true`, {
+        const res = await fetch(`/api/files/${file.id}/download?inline=true`, {
           credentials: "include",
         });
         if (!res.ok) throw new Error(`Failed to download file (${res.status})`);

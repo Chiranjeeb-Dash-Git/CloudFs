@@ -17,9 +17,24 @@ import { usersRouter } from "./routes/users.js";
 import { oauthRouter } from "./routes/oauth.js";
 import { sendError } from "./util.js";
 
+function parseCorsOrigins(raw) {
+  const defaults = ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"];
+  const configured = raw
+    ? raw.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
+  return [...configured, ...defaults, /http:\/\/localhost:\d+$/, /http:\/\/127\.0\.0\.1:\d+$/];
+}
+
+function isOriginAllowed(requestOrigin, allowed) {
+  if (!requestOrigin) return true;
+  return allowed.some((entry) =>
+    typeof entry === "string" ? entry === requestOrigin : entry.test(requestOrigin)
+  );
+}
+
 export function createApp() {
   const app = express();
-  const origin = process.env.CORS_ORIGIN || "http://localhost:3000";
+  const allowedOrigins = parseCorsOrigins(process.env.CORS_ORIGIN);
 
   app.use(
     helmet({
@@ -31,7 +46,9 @@ export function createApp() {
   );
   app.use(
     cors({
-      origin,
+      origin: (requestOrigin, callback) => {
+        callback(null, isOriginAllowed(requestOrigin, allowedOrigins));
+      },
       credentials: true,
     }),
   );

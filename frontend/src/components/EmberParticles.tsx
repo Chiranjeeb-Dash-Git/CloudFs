@@ -21,7 +21,7 @@ export function EmberParticles() {
     const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 100);
     camera.position.z = 20;
 
-    const count = 260;
+    const count = 130;
     const geo = new THREE.BufferGeometry();
     const pos = new Float32Array(count * 3);
     const speeds = new Float32Array(count);

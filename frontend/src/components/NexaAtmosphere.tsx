@@ -20,7 +20,7 @@ export function NexaAtmosphere() {
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 120);
     camera.position.z = 28;
 
-    const count = 480;
+    const count = 240;
     const geo = new THREE.BufferGeometry();
     const pos = new Float32Array(count * 3);
     const speeds = new Float32Array(count);
