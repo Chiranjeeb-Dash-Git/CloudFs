@@ -274,31 +274,23 @@ if (process.env.DATABASE_URL) {
   async function connectAndSync() {
     isInitialLoad = true;
     try {
-      // 1. Load schema.sql to create tables if not exists
-      const schemaPath = path.join(__dirname, "../sql/schema.sql");
-      if (fs.existsSync(schemaPath)) {
-        const schemaSql = fs.readFileSync(schemaPath, "utf8");
-        // Remove 'create extension' line if it fails due to permissions on hosted DB
-        try {
-          await pool.query(schemaSql);
-          console.log("PostgreSQL database schema synchronized successfully.");
-        } catch (schemaErr) {
-          console.warn("PostgreSQL schema execution warning, trying table by table...", schemaErr.message);
-          // Split queries by semicolon and try executing individually
-          const queries = schemaSql.split(";").map(q => q.trim()).filter(Boolean);
-          for (const q of queries) {
-            try {
-              await pool.query(q);
-            } catch (qErr) {
-              if (!q.toLowerCase().includes("extension")) {
-                console.error("Failed executing query:", q, qErr.message);
-              }
-            }
+      // 1. Skip heavy schema sync in production/Vercel to prevent timeouts
+      const isVercel = !!process.env.VERCEL;
+      
+      if (!isVercel) {
+        const schemaPath = path.join(__dirname, "../sql/schema.sql");
+        if (fs.existsSync(schemaPath)) {
+          const schemaSql = fs.readFileSync(schemaPath, "utf8");
+          try {
+            await pool.query(schemaSql);
+            console.log("PostgreSQL schema synchronized.");
+          } catch (schemaErr) {
+            console.warn("Schema sync warning:", schemaErr.message);
           }
         }
       }
 
-      // 2. Create custom refresh_tokens table
+      // 2. Ensure critical tables exist (fast check)
       await pool.query(`
         CREATE TABLE IF NOT EXISTS refresh_tokens (
           token TEXT PRIMARY KEY,

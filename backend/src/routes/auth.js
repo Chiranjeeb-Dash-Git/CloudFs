@@ -269,8 +269,13 @@ authRouter.post("/google", (req, res, next) => {
     const body = googleSchema.parse(incoming);
     
     // 2. Find or create user
-    let user = mem.users.find((u) => u.providers?.google?.sub === body.googleSub);
-    if (!user) user = mem.users.find((u) => u.email === body.email.toLowerCase());
+    let user;
+    try {
+      user = mem.users.find((u) => u.providers?.google?.sub === body.googleSub);
+      if (!user) user = mem.users.find((u) => u.email === body.email.toLowerCase());
+    } catch (findErr) {
+      console.error("[Google OAuth] Memory store search failed:", findErr);
+    }
     
     const isNewUser = !user;
     if (!user) {
@@ -286,7 +291,12 @@ authRouter.post("/google", (req, res, next) => {
         quotaBytes: mem.DEFAULT_QUOTA_BYTES,
         createdAt: mem.now(),
       };
-      mem.users.push(user);
+      try {
+        mem.users.push(user);
+      } catch (pushErr) {
+        console.error("[Google OAuth] Failed to save user to store:", pushErr);
+        throw fail(500, "STORAGE_ERROR", "Could not save user profile");
+      }
     } else {
       // Update existing user with latest Google info
       user.providers = { ...(user.providers || {}), google: { sub: body.googleSub, email: body.email.toLowerCase() } };
