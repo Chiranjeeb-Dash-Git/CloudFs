@@ -4,4 +4,14 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const storageDir = path.resolve(process.env.STORAGE_DIR || path.join(__dirname, "../storage"));
-fs.mkdirSync(storageDir, { recursive: true });
+
+// Only attempt to create the directory if we're not in a serverless environment (like Vercel)
+if (process.env.NODE_ENV !== "production" || process.env.VERCEL) {
+  try {
+    if (!fs.existsSync(storageDir)) {
+      fs.mkdirSync(storageDir, { recursive: true });
+    }
+  } catch (err) {
+    console.warn("Warning: Could not create storage directory. This is expected in serverless environments.", err.message);
+  }
+}
