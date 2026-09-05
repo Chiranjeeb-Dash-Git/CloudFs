@@ -3,16 +3,5 @@
   "installCommand": "npm install && npm install --prefix frontend && npm install --prefix backend",
   "buildCommand": "cd frontend && npm run build",
   "outputDirectory": "frontend/.next",
-  "framework": "nextjs",
-  "functions": {
-    "api/index.js": {
-      "includeFiles": "backend/**"
-    }
-  },
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "/api/index.js"
-    }
-  ]
+  "framework": "nextjs"
 }
