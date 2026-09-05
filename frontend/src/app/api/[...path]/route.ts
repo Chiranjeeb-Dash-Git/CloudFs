@@ -146,14 +146,14 @@ async function handle(req: NextRequest) {
             if (err) {
               const status = err.status || 500;
               const msg = err.message || "Express Error";
-              resolve(NextResponse.json({ error: { code: err.code || "EXPRESS_MIDDLEWARE_ERR", message: msg, stack: err.stack } }, { status }));
+              resolve(NextResponse.json({ error: { code: err.code || "EXPRESS_MIDDLEWARE_ERR", message: msg } }, { status }));
             } else {
               resolve(NextResponse.json({ error: { code: "NOT_FOUND", message: "Route not found" } }, { status: 404 }));
             }
           });
         } catch (err: any) {
           console.error("Express App Handler Exception:", err);
-          resolve(NextResponse.json({ error: { code: "EXPRESS_ERR", message: err.message, stack: err.stack } }, { status: 500 }));
+          resolve(NextResponse.json({ error: { code: "EXPRESS_ERR", message: err.message } }, { status: 500 }));
         }
       };
 
@@ -168,7 +168,7 @@ async function handle(req: NextRequest) {
     });
   } catch (outerErr: any) {
     console.error("Route Handler Outer Exception:", outerErr);
-    return NextResponse.json({ error: { code: "BRIDGE_ERR", message: outerErr.message, stack: outerErr.stack } }, { status: 500 });
+    return NextResponse.json({ error: { code: "BRIDGE_ERR", message: outerErr.message } }, { status: 500 });
   }
 }
 
