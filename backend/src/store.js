@@ -27,7 +27,7 @@ function snakeToCamel(str) {
 }
 
 function toSnakeCase(obj) {
-  if (!obj || typeof obj !== "object") return obj;
+  if (obj === null || obj === undefined || typeof obj !== "object") return obj;
   if (Array.isArray(obj)) return obj.map(toSnakeCase);
   if (obj instanceof Date) return obj;
   const result = {};
@@ -43,7 +43,7 @@ function toSnakeCase(obj) {
 }
 
 function toCamelCase(obj) {
-  if (!obj || typeof obj !== "object") return obj;
+  if (obj === null || obj === undefined || typeof obj !== "object") return obj;
   if (Array.isArray(obj)) return obj.map(toCamelCase);
   const result = {};
   for (const key of Object.keys(obj)) {
@@ -119,7 +119,7 @@ export function createMemoryStore() {
       let u = users.find((x) => 
         (id && x.id === id) || 
         (googleSub && x.providers?.google?.sub === googleSub) ||
-        (email && x.email.toLowerCase() === email.toLowerCase())
+        (email && x.email?.toLowerCase() === email.toLowerCase())
       );
       if (u) return u;
       if (pool) {
