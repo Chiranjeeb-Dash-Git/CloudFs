@@ -161,14 +161,14 @@ async function handle(req: NextRequest) {
             if (err) {
               const status = err.status || 500;
               const msg = err.message || "Express Error";
-              resolve(NextResponse.json({ error: { code: err.code || "EXPRESS_MIDDLEWARE_ERR", message: msg } }, { status }));
+              resolve(NextResponse.json({ error: { code: err.code || "EXPRESS_MIDDLEWARE_ERR", message: msg, details: err.stack } }, { status }));
             } else {
               resolve(NextResponse.json({ error: { code: "NOT_FOUND", message: "Route not found" } }, { status: 404 }));
             }
           });
         } catch (err: any) {
           console.error("Express App Handler Exception:", err);
-          resolve(NextResponse.json({ error: { code: "EXPRESS_ERR", message: err.message } }, { status: 500 }));
+          resolve(NextResponse.json({ error: { code: "EXPRESS_ERR", message: err.message, details: err.stack } }, { status: 500 }));
         }
       };
 
