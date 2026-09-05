@@ -67,6 +67,12 @@ async function handle(req: NextRequest) {
       };
 
       const dispatch = (parsedBody: any) => {
+        const rawCookies = req.cookies.getAll();
+        const cookieMap: Record<string, string> = {};
+        if (Array.isArray(rawCookies)) {
+          rawCookies.forEach(c => { if (c && c.name) cookieMap[c.name] = c.value; });
+        }
+
         const mockReq: any = {
           method,
           url,
@@ -75,12 +81,46 @@ async function handle(req: NextRequest) {
           query: Object.fromEntries(req.nextUrl.searchParams),
           headers,
           body: parsedBody || {},
-          cookies: Object.fromEntries(req.cookies.getAll().map(c => [c.name, c.value])),
-          on: () => {},
-          removeListener: () => {}
+          cookies: cookieMap,
+          secret: undefined,
+          signedCookies: {},
+          get(name: string) {
+            return headers[name.toLowerCase()] || headers[name];
+          },
+          header(name: string) {
+            return this.get(name);
+          },
+          on: () => mockReq,
+          once: () => mockReq,
+          emit: () => false,
+          removeListener: () => mockReq,
+          removeAllListeners: () => mockReq,
+          pipe: () => mockReq,
+          unpipe: () => mockReq,
+          resume: () => mockReq,
+          pause: () => mockReq,
+          socket: { encrypted: true, remoteAddress: "127.0.0.1" },
+          connection: { encrypted: true, remoteAddress: "127.0.0.1" },
         };
+
+        mockRes.req = mockReq;
+        mockRes.get = (n: string) => resHeaders.get(n);
+        mockRes.header = (n: string, v: any) => mockRes.setHeader(n, v);
+        mockRes.on = () => mockRes;
+        mockRes.once = () => mockRes;
+        mockRes.emit = () => false;
+        mockRes.removeListener = () => mockRes;
+
         try {
-          cachedApp(mockReq, mockRes);
+          cachedApp(mockReq, mockRes, (err: any) => {
+            if (err) {
+              const status = err.status || 500;
+              const msg = err.message || "Express Error";
+              resolve(NextResponse.json({ error: { code: err.code || "EXPRESS_MIDDLEWARE_ERR", message: msg, stack: err.stack } }, { status }));
+            } else {
+              resolve(NextResponse.json({ error: { code: "NOT_FOUND", message: "Route not found" } }, { status: 404 }));
+            }
+          });
         } catch (err: any) {
           console.error("Express App Handler Exception:", err);
           resolve(NextResponse.json({ error: { code: "EXPRESS_ERR", message: err.message, stack: err.stack } }, { status: 500 }));
