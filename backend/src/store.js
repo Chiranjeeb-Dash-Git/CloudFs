@@ -351,23 +351,18 @@ if (process.env.DATABASE_URL) {
     try {
       if (!pool) return;
 
-      // 1. Skip heavy schema sync in production/Vercel to prevent timeouts
-      const isVercel = !!process.env.VERCEL;
-      
-      if (!isVercel) {
-        try {
-          const schemaPath = path.join(__dirname, "../sql/schema.sql");
-          if (fs.existsSync(schemaPath)) {
-            const schemaSql = fs.readFileSync(schemaPath, "utf8");
-            await pool.query(schemaSql);
-            console.log("PostgreSQL schema synchronized.");
-          }
-        } catch (schemaErr) {
-          console.warn("Schema sync skipped/failed:", schemaErr.message);
+      // 1. Ensure database schema and critical tables exist
+      try {
+        const schemaPath = path.join(__dirname, "../sql/schema.sql");
+        if (fs.existsSync(schemaPath)) {
+          const schemaSql = fs.readFileSync(schemaPath, "utf8");
+          await pool.query(schemaSql);
+          console.log("PostgreSQL schema synchronized.");
         }
+      } catch (schemaErr) {
+        console.warn("Schema sync skipped/failed:", schemaErr.message);
       }
 
-      // 2. Ensure critical tables exist (fast check)
       try {
         await pool.query(`
           CREATE TABLE IF NOT EXISTS refresh_tokens (
@@ -381,10 +376,13 @@ if (process.env.DATABASE_URL) {
         console.warn("Table check failed:", e.message);
       }
 
-      // Ensure file_data bytea column exists in file_versions for database storage
-      await pool.query("ALTER TABLE file_versions ADD COLUMN IF NOT EXISTS file_data bytea");
+      try {
+        await pool.query("ALTER TABLE file_versions ADD COLUMN IF NOT EXISTS file_data bytea");
+      } catch (e) {
+        console.warn("Column check failed:", e.message);
+      }
 
-      // 3. Load records from DB into local cache
+      // 2. Load records from DB into local cache
       const tables = [
         { key: "users", name: "users", pk: "id" },
         { key: "folders", name: "folders", pk: "id" },
@@ -400,26 +398,33 @@ if (process.env.DATABASE_URL) {
       ];
 
       for (const t of tables) {
-        // Exclude file_data from initial load to save memory and improve startup time
-        const query = t.name === "file_versions" 
-          ? "SELECT id, file_id, version_number, storage_key, size_bytes, checksum, created_at FROM file_versions"
-          : `SELECT * FROM ${t.name}`;
-          
-        const res = await pool.query(query);
-        for (const row of res.rows) {
-          const item = toCamelCase(row);
-          const proxiedItem = makePersistedObject(item, t.name, t.pk);
-          mem[t.key].push(proxiedItem);
+        try {
+          const query = t.name === "file_versions" 
+            ? "SELECT id, file_id, version_number, storage_key, size_bytes, checksum, created_at FROM file_versions"
+            : `SELECT * FROM ${t.name}`;
+            
+          const res = await pool.query(query);
+          for (const row of res.rows) {
+            const item = toCamelCase(row);
+            const proxiedItem = makePersistedObject(item, t.name, t.pk);
+            mem[t.key].push(proxiedItem);
+          }
+          console.log(`Loaded ${res.rowCount} records into mem.${t.key}`);
+        } catch (tableErr) {
+          console.warn(`Table ${t.name} query failed:`, tableErr.message);
         }
-        console.log(`Loaded ${res.rowCount} records into mem.${t.key}`);
       }
 
       // Load refresh tokens Map
-      const refreshRes = await pool.query("SELECT * FROM refresh_tokens");
-      for (const row of refreshRes.rows) {
-        mem.refresh.set(row.token, { userId: row.user_id, jti: row.jti });
+      try {
+        const refreshRes = await pool.query("SELECT * FROM refresh_tokens");
+        for (const row of refreshRes.rows) {
+          mem.refresh.set(row.token, { userId: row.user_id, jti: row.jti });
+        }
+        console.log(`Loaded ${refreshRes.rowCount} refresh tokens`);
+      } catch (refreshErr) {
+        console.warn("Refresh tokens load failed:", refreshErr.message);
       }
-      console.log(`Loaded ${refreshRes.rowCount} refresh tokens`);
 
     } catch (err) {
       console.error("Database connection/load error:", err);
