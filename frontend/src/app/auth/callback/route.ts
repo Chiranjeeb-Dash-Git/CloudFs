@@ -73,71 +73,70 @@ export async function GET(request: Request) {
     }
 
     const {
-      data: { user },
+      data: { user: supabaseUser },
       error: getUserError,
     } = await supabase.auth.getUser();
-    if (getUserError || !user) {
+    if (getUserError || !supabaseUser) {
       console.error("[auth/callback] getUser failed:", getUserError);
       return redirectWithError("auth-no-user");
     }
 
-    let backendOk = false;
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), AUTH_CALLBACK_TIMEOUT_MS);
+      const rawName = supabaseUser.user_metadata?.full_name ?? supabaseUser.user_metadata?.name;
+      const rawAvatar = supabaseUser.user_metadata?.avatar_url ?? supabaseUser.user_metadata?.picture;
+      const rawSub = supabaseUser.user_metadata?.sub ?? supabaseUser.id;
+      const userEmail = (supabaseUser.email || "").toLowerCase();
 
-      const rawName = user.user_metadata?.full_name ?? user.user_metadata?.name;
-      const rawAvatar = user.user_metadata?.avatar_url ?? user.user_metadata?.picture;
-      const rawSub = user.user_metadata?.sub ?? user.id;
+      // Execute Google authentication directly in the Server Route without external network fetch
+      const { mem } = await import("../../../../../backend/src/store.js");
+      const { setAuthCookies, recordSession } = await import("../../../../../backend/src/auth.js");
 
-      const bridgePayload: Record<string, unknown> = {
-        email: user.email,
-        googleSub: rawSub,
+      let dbUser = await mem.findUser(null, rawSub);
+      if (!dbUser && userEmail) dbUser = await mem.findUser(null, null, userEmail);
+
+      if (!dbUser) {
+        dbUser = {
+          id: mem.id(),
+          email: userEmail,
+          name: rawName || userEmail.split("@")[0] || "User",
+          imageUrl: rawAvatar || null,
+          passwordHash: null,
+          twoFactorEnabled: false,
+          twoFactorSecret: null,
+          providers: { google: { sub: rawSub, email: userEmail } },
+          quotaBytes: mem.DEFAULT_QUOTA_BYTES,
+          createdAt: mem.now(),
+        };
+        mem.users.push(dbUser);
+      } else {
+        dbUser.providers = { ...(dbUser.providers || {}), google: { sub: rawSub, email: userEmail } };
+        if (rawAvatar) dbUser.imageUrl = rawAvatar;
+        if (rawName) dbUser.name = rawName;
+      }
+
+      const finalRes = applyCookies(NextResponse.redirect(`${origin}${next}`));
+      
+      // Attach Express mock res to set cookies directly on NextResponse
+      const mockRes: any = {
+        cookie(name: string, val: string, options: any = {}) {
+          finalRes.cookies.set(name, val, {
+            httpOnly: options.httpOnly ?? true,
+            sameSite: options.sameSite ?? "lax",
+            secure: options.secure ?? true,
+            path: options.path ?? "/",
+            maxAge: options.maxAge ? Math.floor(options.maxAge / 1000) : undefined,
+          });
+        }
       };
-      if (rawName && typeof rawName === "string") bridgePayload.name = rawName;
-      if (rawAvatar && typeof rawAvatar === "string") bridgePayload.imageUrl = rawAvatar;
 
-      console.log("[auth/callback] calling backend bridge at", `${apiBase}/api/auth/google`, "payload keys:", Object.keys(bridgePayload));
+      const jti = mem.id();
+      setAuthCookies(mockRes, dbUser, { refreshJti: jti });
+      recordSession(dbUser.id, request as any, jti);
 
-      const backendRes = await fetch(`${apiBase}/api/auth/google`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bridgePayload),
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-
-      if (backendRes.ok) {
-        const finalRes = applyCookies(NextResponse.redirect(`${origin}${next}`));
-        for (const cookie of backendRes.headers.getSetCookie()) {
-          finalRes.headers.append("Set-Cookie", cookie);
-        }
-        backendOk = true;
-        return finalRes;
-      } else {
-        const text = await backendRes.text();
-        let body: any = null;
-        try {
-          body = JSON.parse(text);
-        } catch {
-          console.error("[auth/callback] Backend returned non-JSON response:", text.slice(0, 200));
-        }
-        
-        console.error(
-          `[auth/callback] backend bridge returned non-OK status=${backendRes.status} statusText=${backendRes.statusText} body=`,
-          body || text.slice(0, 100)
-        );
-        const detailCode = body?.error?.code ? `${backendRes.status}-${body.error.code}` : String(backendRes.status);
-        return redirectWithError(`auth-backend-bridge-${detailCode}`);
-      }
-    } catch (bridgeErr: any) {
-      if (bridgeErr?.name === "AbortError") {
-        console.error("[auth/callback] backend bridge timed out after", AUTH_CALLBACK_TIMEOUT_MS, "ms");
-        return redirectWithError("auth-backend-bridge-timeout");
-      } else {
-        console.error("[auth/callback] backend bridge fetch failed:", bridgeErr);
-        return redirectWithError("auth-backend-bridge-unreachable");
-      }
+      return finalRes;
+    } catch (directAuthErr: any) {
+      console.error("[auth/callback] Direct Google auth error:", directAuthErr);
+      return redirectWithError(`auth-backend-bridge-500`);
     }
   } catch (topLevelErr: any) {
     console.error("[auth/callback] unexpected top-level error:", topLevelErr);
