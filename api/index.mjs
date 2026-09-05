@@ -2,8 +2,8 @@
 // Using .mjs extension forces Node.js and Vercel to treat this as ES Module,
 // preventing esbuild from downleveling dynamic imports to require().
 
-let cachedApp = null;
-let storeReadyPromise = null;
+var cachedApp = null;
+var storeReadyPromise = null;
 
 export default async function handler(req, res) {
   try {
