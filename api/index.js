@@ -4,6 +4,8 @@
 let cachedApp = null;
 let storeReadyPromise = null;
 
+const dynamicImport = new Function("specifier", "return import(specifier)");
+
 module.exports = async (req, res) => {
   try {
     if (!cachedApp) {
@@ -22,9 +24,9 @@ module.exports = async (req, res) => {
         // Fallback if lazily loaded
       }
 
-      // Dynamically import the ESM backend
-      const { createApp } = await import("../backend/src/app.js");
-      const { ensureStoreReady } = await import("../backend/src/store.js");
+      // Dynamically import the ESM backend (via indirect import)
+      const { createApp } = await dynamicImport("../backend/src/app.js");
+      const { ensureStoreReady } = await dynamicImport("../backend/src/store.js");
       cachedApp = createApp();
       storeReadyPromise = ensureStoreReady();
     }
