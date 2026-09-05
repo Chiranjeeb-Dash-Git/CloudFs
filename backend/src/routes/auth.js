@@ -255,7 +255,7 @@ const googleSchema = z.object({
   googleSub: z.string().min(1),
 });
 
-authRouter.post("/google", (req, res, next) => {
+authRouter.post("/google", async (req, res, next) => {
   const startAt = Date.now();
   
   // Wrap entire route in try/catch to prevent ANY unhandled crash
