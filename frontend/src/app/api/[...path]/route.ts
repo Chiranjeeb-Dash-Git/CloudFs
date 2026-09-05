@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ServerResponse } from "node:http";
 import { createApp } from "../../../../../backend/src/app.js";
 import { ensureStoreReady } from "../../../../../backend/src/store.js";
 
@@ -30,39 +31,56 @@ async function handle(req: NextRequest) {
       let statusCode = 200;
       const resHeaders = new Headers();
 
-      const mockRes: any = {
-        statusCode: 200,
-        status(code: number) {
-          statusCode = code;
-          return mockRes;
-        },
-        setHeader(name: string, value: any) {
-          resHeaders.set(name, Array.isArray(value) ? value.join(", ") : String(value));
-          return mockRes;
-        },
-        getHeader(name: string) {
-          return resHeaders.get(name);
-        },
-        json(data: any) {
-          resHeaders.set("Content-Type", "application/json");
-          const jsonStr = JSON.stringify(data);
-          resolve(new NextResponse(jsonStr, { status: statusCode, headers: resHeaders }));
-        },
-        send(data: any) {
-          if (typeof data === "string") {
-            resolve(new NextResponse(data, { status: statusCode, headers: resHeaders }));
-          } else if (Buffer.isBuffer(data) || data instanceof Uint8Array) {
-            resolve(new NextResponse(data as any, { status: statusCode, headers: resHeaders }));
-          } else {
-            mockRes.json(data);
-          }
-        },
-        end(data?: any) {
-          if (data) {
-            mockRes.send(data);
-          } else {
-            resolve(new NextResponse(null, { status: statusCode, headers: resHeaders }));
-          }
+      const mockRes: any = Object.create(ServerResponse.prototype);
+      mockRes.statusCode = 200;
+      mockRes._headers = {};
+      mockRes._headerNames = {};
+      mockRes._removedHeader = {};
+      mockRes._header = true;
+      mockRes.headersSent = false;
+
+      mockRes.status = (code: number) => {
+        statusCode = code;
+        mockRes.statusCode = code;
+        return mockRes;
+      };
+      mockRes.setHeader = (name: string, value: any) => {
+        resHeaders.set(name, Array.isArray(value) ? value.join(", ") : String(value));
+        return mockRes;
+      };
+      mockRes.getHeader = (name: string) => resHeaders.get(name);
+      mockRes.removeHeader = (name: string) => {
+        resHeaders.delete(name);
+        return mockRes;
+      };
+      mockRes.hasHeader = (name: string) => resHeaders.has(name);
+      mockRes.writeHead = (code: number, headersObj?: any) => {
+        statusCode = code;
+        mockRes.statusCode = code;
+        if (headersObj) {
+          Object.keys(headersObj).forEach(k => resHeaders.set(k, headersObj[k]));
+        }
+        return mockRes;
+      };
+      mockRes.json = (data: any) => {
+        resHeaders.set("Content-Type", "application/json");
+        const jsonStr = JSON.stringify(data);
+        resolve(new NextResponse(jsonStr, { status: statusCode, headers: resHeaders }));
+      };
+      mockRes.send = (data: any) => {
+        if (typeof data === "string") {
+          resolve(new NextResponse(data, { status: statusCode, headers: resHeaders }));
+        } else if (Buffer.isBuffer(data) || data instanceof Uint8Array) {
+          resolve(new NextResponse(data as any, { status: statusCode, headers: resHeaders }));
+        } else {
+          mockRes.json(data);
+        }
+      };
+      mockRes.end = (data?: any) => {
+        if (data) {
+          mockRes.send(data);
+        } else {
+          resolve(new NextResponse(null, { status: statusCode, headers: resHeaders }));
         }
       };
 
