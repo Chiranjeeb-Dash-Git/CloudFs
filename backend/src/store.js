@@ -9,6 +9,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const now = () => new Date().toISOString();
 const DEFAULT_QUOTA_BYTES = Number(process.env.DEFAULT_QUOTA_BYTES || 524288000); // 500 MB default (Supabase free tier cap)
 
+// Declare module-level state at the top to prevent TDZ issues when bundled by esbuild
+export let pool = null;
+let isInitialLoad = false;
+const _state = { ready: null };
+
 // Convert camelCase keys to snake_case for PostgreSQL columns
 function camelToSnake(str) {
   return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
@@ -191,10 +196,6 @@ export function createMemoryStore() {
 export const mem = createMemoryStore();
 
 // Setup PostgreSQL pool if DATABASE_URL is configured
-export let pool = null;
-let isInitialLoad = false;
-let storeReadyPromise = null;
-
 if (process.env.DATABASE_URL) {
   console.log("DATABASE_URL is set. Initializing PostgreSQL pool...");
   pool = new Pool({
@@ -451,9 +452,9 @@ if (process.env.DATABASE_URL) {
   }
 
   // Trigger async db synchronization
-  storeReadyPromise = connectAndSync();
+  _state.ready = connectAndSync();
 }
 
 export function ensureStoreReady() {
-  return storeReadyPromise || Promise.resolve();
+  return _state.ready || Promise.resolve();
 }
