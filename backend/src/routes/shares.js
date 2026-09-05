@@ -58,10 +58,10 @@ function resourceSummary(share) {
   return f ? { ...camelFolder(f), _role: share.role } : null;
 }
 
-sharesRouter.post("/shares", requireAuth, (req, res, next) => {
+sharesRouter.post("/shares", requireAuth, async (req, res, next) => {
   try {
     const body = shareCreateSchema.parse(req.body);
-    if (body.resourceId !== "root") assertWrite(req.user.id, body.resourceType, body.resourceId);
+    if (body.resourceId !== "root") await assertWrite(req.user.id, body.resourceType, body.resourceId);
     const grantee = findGrantee(body.granteeUserId);
     if (!grantee) throw fail(404, "NOT_FOUND", "Grantee user not found");
     if (grantee.id === req.user.id) throw fail(400, "VALIDATION", "Cannot share with yourself");
@@ -146,11 +146,11 @@ sharesRouter.get("/shares/outbox", requireAuth, (req, res) => {
   res.json({ items });
 });
 
-sharesRouter.get("/shares/:resourceType/:resourceId", requireAuth, (req, res, next) => {
+sharesRouter.get("/shares/:resourceType/:resourceId", requireAuth, async (req, res, next) => {
   try {
     const { resourceType, resourceId } = req.params;
     if (!["file", "folder"].includes(resourceType)) throw fail(400, "VALIDATION", "Invalid resource type");
-    if (resourceId !== "root") assertWrite(req.user.id, resourceType, resourceId);
+    if (resourceId !== "root") await assertWrite(req.user.id, resourceType, resourceId);
     const shares = mem.shares
       .filter((s) => s.resourceType === resourceType && s.resourceId === resourceId)
       .map((s) => {
@@ -166,13 +166,13 @@ sharesRouter.get("/shares/:resourceType/:resourceId", requireAuth, (req, res, ne
   }
 });
 
-sharesRouter.delete("/shares/:id", requireAuth, (req, res, next) => {
+sharesRouter.delete("/shares/:id", requireAuth, async (req, res, next) => {
   try {
     const idx = mem.shares.findIndex((s) => s.id === req.params.id);
     if (idx === -1) throw fail(404, "NOT_FOUND", "Share not found");
     const share = mem.shares[idx];
-    const ownsResource =
-      (share.resourceType === "file" ? getFile(share.resourceId) : getFolder(share.resourceId))?.ownerId === req.user.id;
+    const targetResource = share.resourceType === "file" ? await getFile(share.resourceId) : await getFolder(share.resourceId);
+    const ownsResource = targetResource?.ownerId === req.user.id;
     if (!ownsResource && share.createdBy !== req.user.id) {
       throw fail(403, "FORBIDDEN", "Cannot revoke this share");
     }
@@ -186,7 +186,7 @@ sharesRouter.delete("/shares/:id", requireAuth, (req, res, next) => {
 sharesRouter.post("/link-shares", requireAuth, async (req, res, next) => {
   try {
     const body = linkCreateSchema.parse(req.body);
-    if (body.resourceId !== "root") assertWrite(req.user.id, body.resourceType, body.resourceId);
+    if (body.resourceId !== "root") await assertWrite(req.user.id, body.resourceType, body.resourceId);
     const token = mem.id().replace(/-/g, "") + mem.id().replace(/-/g, "").slice(0, 16);
     const link = {
       id: mem.id(),

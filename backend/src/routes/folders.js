@@ -36,11 +36,11 @@ function descendantsSize(folderId) {
   return total;
 }
 
-foldersRouter.post("/", (req, res, next) => {
+foldersRouter.post("/", async (req, res, next) => {
   try {
     const body = createSchema.parse(req.body);
     const parentId = body.parentId ?? null;
-    if (parentId) assertWrite(req.user.id, "folder", parentId);
+    if (parentId) await assertWrite(req.user.id, "folder", parentId);
     const dup = mem.folders.find(
       (f) => f.ownerId === req.user.id && f.parentId === parentId && f.name === body.name && !f.isDeleted,
     );
@@ -81,7 +81,7 @@ foldersRouter.get("/tree", (req, res) => {
   res.json({ tree: build("__root__") });
 });
 
-foldersRouter.get("/:id", (req, res, next) => {
+foldersRouter.get("/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
     if (id === "root") {
@@ -89,14 +89,15 @@ foldersRouter.get("/:id", (req, res, next) => {
       const files = mem.files.filter((f) => f.ownerId === req.user.id && !f.folderId && !f.isDeleted).map(camelFile);
       return res.json({ folder: null, children: { folders, files }, path: [] });
     }
-    assertRead(req.user.id, "folder", id);
-    const folder = getFolder(id);
+    await assertRead(req.user.id, "folder", id);
+    const folder = await getFolder(id);
     const folders = mem.folders.filter((f) => f.parentId === id && !f.isDeleted).map(camelFolder);
     const files = mem.files.filter((f) => f.folderId === id && !f.isDeleted).map(camelFile);
+    const pathFolders = await folderPath(id);
     res.json({
       folder: camelFolder(folder),
       children: { folders, files },
-      path: folderPath(id).map(camelFolder),
+      path: pathFolders.map(camelFolder),
       totalSizeBytes: descendantsSize(id),
     });
   } catch (err) {
@@ -104,19 +105,20 @@ foldersRouter.get("/:id", (req, res, next) => {
   }
 });
 
-foldersRouter.patch("/:id", (req, res, next) => {
+foldersRouter.patch("/:id", async (req, res, next) => {
   try {
     const body = patchSchema.parse(req.body);
-    assertWrite(req.user.id, "folder", req.params.id);
-    const folder = getFolder(req.params.id);
+    await assertWrite(req.user.id, "folder", req.params.id);
+    const folder = await getFolder(req.params.id);
     if (body.name !== undefined) folder.name = sanitizeFilename(body.name);
     if (body.parentId !== undefined) {
       if (body.parentId === folder.id) throw fail(400, "VALIDATION", "Cannot move folder into itself");
       if (body.parentId) {
         // Prevent cycle
-        const path = folderPath(body.parentId).map((f) => f.id);
+        const currentPath = await folderPath(body.parentId);
+        const path = currentPath.map((f) => f.id);
         if (path.includes(folder.id)) throw fail(400, "VALIDATION", "Move would create a cycle");
-        assertWrite(req.user.id, "folder", body.parentId);
+        await assertWrite(req.user.id, "folder", body.parentId);
       }
       folder.parentId = body.parentId;
     }
@@ -135,10 +137,10 @@ foldersRouter.patch("/:id", (req, res, next) => {
   }
 });
 
-foldersRouter.delete("/:id", (req, res, next) => {
+foldersRouter.delete("/:id", async (req, res, next) => {
   try {
-    assertWrite(req.user.id, "folder", req.params.id);
-    const folder = getFolder(req.params.id);
+    await assertWrite(req.user.id, "folder", req.params.id);
+    const folder = await getFolder(req.params.id);
     folder.isDeleted = true;
     folder.deletedAt = mem.now();
     folder.updatedAt = mem.now();

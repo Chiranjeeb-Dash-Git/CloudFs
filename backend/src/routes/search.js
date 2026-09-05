@@ -89,20 +89,20 @@ searchRouter.delete("/stars", requireAuth, (req, res, next) => {
   }
 });
 
-searchRouter.get("/stars", requireAuth, (req, res) => {
-  const items = mem.stars
-    .filter((s) => s.userId === req.user.id)
-    .map((s) => {
-      const r = s.resourceType === "file" ? getFile(s.resourceId) : getFolder(s.resourceId);
-      if (!r || r.isDeleted) return null;
-      return {
+searchRouter.get("/stars", requireAuth, async (req, res) => {
+  const myStars = mem.stars.filter((s) => s.userId === req.user.id);
+  const items = [];
+  for (const s of myStars) {
+    const r = s.resourceType === "file" ? await getFile(s.resourceId) : await getFolder(s.resourceId);
+    if (r && !r.isDeleted) {
+      items.push({
         resourceType: s.resourceType,
         resourceId: s.resourceId,
         createdAt: s.createdAt,
         resource: s.resourceType === "file" ? camelFile(r) : camelFolder(r),
-      };
-    })
-    .filter(Boolean);
+      });
+    }
+  }
   res.json({ items });
 });
 
@@ -123,10 +123,10 @@ searchRouter.get("/trash", requireAuth, (req, res) => {
   res.json({ items: [...folders, ...files], retentionDays: TRASH_RETENTION_DAYS });
 });
 
-searchRouter.post("/trash/restore", requireAuth, (req, res, next) => {
+searchRouter.post("/trash/restore", requireAuth, async (req, res, next) => {
   try {
     const body = z.object({ resourceType: z.enum(["file", "folder"]), resourceId: z.string().uuid() }).parse(req.body);
-    const resource = body.resourceType === "file" ? getFile(body.resourceId) : getFolder(body.resourceId);
+    const resource = body.resourceType === "file" ? await getFile(body.resourceId) : await getFolder(body.resourceId);
     if (!resource || resource.ownerId !== req.user.id) throw fail(404, "NOT_FOUND", "Item not found");
     resource.isDeleted = false;
     resource.deletedAt = null;
@@ -138,11 +138,11 @@ searchRouter.post("/trash/restore", requireAuth, (req, res, next) => {
   }
 });
 
-searchRouter.delete("/trash/:resourceType/:resourceId", requireAuth, (req, res, next) => {
+searchRouter.delete("/trash/:resourceType/:resourceId", requireAuth, async (req, res, next) => {
   try {
     const { resourceType, resourceId } = req.params;
     if (!["file", "folder"].includes(resourceType)) throw fail(400, "VALIDATION", "Invalid resource type");
-    const resource = resourceType === "file" ? getFile(resourceId) : getFolder(resourceId);
+    const resource = resourceType === "file" ? await getFile(resourceId) : await getFolder(resourceId);
     if (!resource || resource.ownerId !== req.user.id) throw fail(404, "NOT_FOUND", "Item not found");
     if (!resource.isDeleted) throw fail(400, "VALIDATION", "Item is not in trash");
     // Permanently delete: remove from in-memory + remove any shares/links/stars

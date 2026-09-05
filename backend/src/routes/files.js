@@ -42,10 +42,10 @@ function enforceQuota(userId, additionalBytes) {
   }
 }
 
-filesRouter.post("/init", requireAuth, (req, res, next) => {
+filesRouter.post("/init", requireAuth, async (req, res, next) => {
   try {
     const body = initSchema.parse(req.body);
-    if (body.folderId) assertWrite(req.user.id, "folder", body.folderId);
+    if (body.folderId) await assertWrite(req.user.id, "folder", body.folderId);
     enforceQuota(req.user.id, body.sizeBytes);
     const fileId = mem.id();
     const ext = path.extname(body.name);
@@ -89,8 +89,8 @@ const tempUploads = new Map();
 
 filesRouter.put("/:id/bytes", requireAuth, async (req, res, next) => {
   try {
-    assertWrite(req.user.id, "file", req.params.id);
-    const file = getFile(req.params.id);
+    await assertWrite(req.user.id, "file", req.params.id);
+    const file = await getFile(req.params.id);
     
     // Ensure we handle the request body as a buffer
     let buf = req.body;
@@ -148,8 +148,8 @@ filesRouter.put("/:id/bytes", requireAuth, async (req, res, next) => {
 filesRouter.post("/complete", requireAuth, async (req, res, next) => {
   try {
     const body = completeSchema.parse(req.body);
-    assertWrite(req.user.id, "file", body.fileId);
-    const file = getFile(body.fileId);
+    await assertWrite(req.user.id, "file", body.fileId);
+    const file = await getFile(body.fileId);
     if (body.checksum) file.checksum = body.checksum;
     file.status = "ready";
     file.updatedAt = mem.now();
@@ -253,13 +253,13 @@ filesRouter.get("/starred", requireAuth, (req, res) => {
   res.json({ files, folders });
 });
 
-filesRouter.get("/:id", requireAuth, (req, res, next) => {
+filesRouter.get("/:id", requireAuth, async (req, res, next) => {
   try {
     if (req.params.id === "recent" || req.params.id === "starred" || req.params.id === "init" || req.params.id === "complete") {
       return next();
     }
-    assertRead(req.user.id, "file", req.params.id);
-    const file = getFile(req.params.id);
+    await assertRead(req.user.id, "file", req.params.id);
+    const file = await getFile(req.params.id);
     const { exp, sig } = signedUrlToken(file.id, 60_000);
     const origin = `${req.protocol}://${req.get("host")}`;
     res.json({
@@ -273,8 +273,11 @@ filesRouter.get("/:id", requireAuth, (req, res, next) => {
 
 filesRouter.get("/:id/download", async (req, res, next) => {
   try {
-    const file = mem.files.find((x) => x.id === req.params.id && !x.isDeleted);
-    if (!file) throw fail(404, "NOT_FOUND", "File not found");
+    let file = mem.files.find((x) => x.id === req.params.id && !x.isDeleted);
+    if (!file && mem.findFile) {
+      file = await mem.findFile(req.params.id);
+    }
+    if (!file || file.isDeleted) throw fail(404, "NOT_FOUND", "File not found");
 
     // Allow access if either authenticated OR valid signed URL token is present
     let hasAccess = false;
@@ -299,7 +302,7 @@ filesRouter.get("/:id/download", async (req, res, next) => {
     }
 
     if (!hasAccess) throw fail(401, "UNAUTHENTICATED", "Sign in required");
-    assertRead(req.user?.id || file.ownerId, "file", req.params.id);
+    await assertRead(req.user?.id || file.ownerId, "file", req.params.id);
 
     // Try in-memory cache first, then query database
     const version = mem.versions.find((v) => v.fileId === file.id);
@@ -345,7 +348,7 @@ filesRouter.get("/:id/public-download", async (req, res, next) => {
     if (link.resourceType !== "file" || link.resourceId !== req.params.id) {
       throw fail(404, "NOT_FOUND", "Link does not point to this file");
     }
-    const file = getFile(req.params.id);
+    const file = await getFile(req.params.id);
     if (!file) throw fail(404, "NOT_FOUND", "File not found");
 
     let version = mem.versions.find((v) => v.id === file.versionId) || mem.versions.find((v) => v.fileId === file.id && v.fileData);
@@ -370,8 +373,11 @@ filesRouter.get("/:id/public-download", async (req, res, next) => {
 
 filesRouter.get("/:id/thumbnail", async (req, res, next) => {
   try {
-    const file = mem.files.find((x) => x.id === req.params.id && !x.isDeleted);
-    if (!file) throw fail(404, "NOT_FOUND", "File not found");
+    let file = mem.files.find((x) => x.id === req.params.id && !x.isDeleted);
+    if (!file && mem.findFile) {
+      file = await mem.findFile(req.params.id);
+    }
+    if (!file || file.isDeleted) throw fail(404, "NOT_FOUND", "File not found");
 
     // Allow access if either authenticated OR valid signed URL token is present
     let hasAccess = false;
@@ -400,7 +406,7 @@ filesRouter.get("/:id/thumbnail", async (req, res, next) => {
       }
     }
 
-    assertRead(req.user?.id || file.ownerId, "file", req.params.id);
+    await assertRead(req.user?.id || file.ownerId, "file", req.params.id);
 
     const version = mem.versions.find((v) => v.fileId === file.id);
     let data = version?.fileData;
@@ -430,9 +436,9 @@ filesRouter.get("/:id/thumbnail", async (req, res, next) => {
   }
 });
 
-filesRouter.get("/:id/versions", requireAuth, (req, res, next) => {
+filesRouter.get("/:id/versions", requireAuth, async (req, res, next) => {
   try {
-    assertRead(req.user.id, "file", req.params.id);
+    await assertRead(req.user.id, "file", req.params.id);
     const versions = mem.versions
       .filter((v) => v.fileId === req.params.id)
       .sort((a, b) => b.versionNumber - a.versionNumber);
@@ -444,8 +450,8 @@ filesRouter.get("/:id/versions", requireAuth, (req, res, next) => {
 
 filesRouter.post("/:id/versions/:versionId/restore", requireAuth, async (req, res, next) => {
   try {
-    assertWrite(req.user.id, "file", req.params.id);
-    const file = getFile(req.params.id);
+    await assertWrite(req.user.id, "file", req.params.id);
+    const file = await getFile(req.params.id);
     const version = mem.versions.find((v) => v.id === req.params.versionId && v.fileId === req.params.id);
     if (!version) throw fail(404, "NOT_FOUND", "Version not found");
     // Archive current state
@@ -479,14 +485,14 @@ filesRouter.post("/:id/versions/:versionId/restore", requireAuth, async (req, re
   }
 });
 
-filesRouter.patch("/:id", requireAuth, (req, res, next) => {
+filesRouter.patch("/:id", requireAuth, async (req, res, next) => {
   try {
     const body = patchSchema.parse(req.body);
-    assertWrite(req.user.id, "file", req.params.id);
-    const file = getFile(req.params.id);
+    await assertWrite(req.user.id, "file", req.params.id);
+    const file = await getFile(req.params.id);
     if (body.name !== undefined) file.name = sanitizeFilename(body.name);
     if (body.folderId !== undefined) {
-      if (body.folderId) assertWrite(req.user.id, "folder", body.folderId);
+      if (body.folderId) await assertWrite(req.user.id, "folder", body.folderId);
       file.folderId = body.folderId;
     }
     file.updatedAt = mem.now();
@@ -504,10 +510,10 @@ filesRouter.patch("/:id", requireAuth, (req, res, next) => {
   }
 });
 
-filesRouter.delete("/:id", requireAuth, (req, res, next) => {
+filesRouter.delete("/:id", requireAuth, async (req, res, next) => {
   try {
-    assertWrite(req.user.id, "file", req.params.id);
-    const file = getFile(req.params.id);
+    await assertWrite(req.user.id, "file", req.params.id);
+    const file = await getFile(req.params.id);
     file.isDeleted = true;
     file.deletedAt = mem.now();
     file.updatedAt = mem.now();
@@ -519,7 +525,7 @@ filesRouter.delete("/:id", requireAuth, (req, res, next) => {
 });
 
 // Bulk operations
-filesRouter.post("/bulk", requireAuth, (req, res, next) => {
+filesRouter.post("/bulk", requireAuth, async (req, res, next) => {
   try {
     const body = bulkSchema.parse(req.body);
     const results = { ok: 0, failed: 0 };
@@ -535,7 +541,7 @@ filesRouter.post("/bulk", requireAuth, (req, res, next) => {
           file.deletedAt = mem.now();
           logActivity(req.user.id, "delete", "file", id, { bulk: true });
         } else if (body.action === "move") {
-          if (body.destinationId) assertWrite(req.user.id, "folder", body.destinationId);
+          if (body.destinationId) await assertWrite(req.user.id, "folder", body.destinationId);
           file.folderId = body.destinationId || null;
           logActivity(req.user.id, "move", "file", id, { folderId: file.folderId, bulk: true });
         } else if (body.action === "star") {

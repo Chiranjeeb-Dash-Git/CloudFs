@@ -106,13 +106,15 @@ export async function requireAuth(req, res, next) {
           if (refreshPayload && refreshPayload.typ === "refresh" && refreshPayload.sub) {
             const user = await findUser(refreshPayload.sub);
             if (user) {
-              const sess = await findSession(user.id, refreshPayload.jti);
-              if (sess) {
-                // Automatically re-issue fresh auth cookies!
-                setAuthCookies(res, user, { refreshJti: refreshPayload.jti });
-                req.user = { id: user.id, email: user.email, name: user.name, imageUrl: user.imageUrl };
-                return next();
+              let sess = await findSession(user.id, refreshPayload.jti);
+              if (!sess) sess = await findSession(user.id);
+              if (!sess) {
+                sess = recordSession(user.id, req, refreshPayload.jti);
               }
+              // Automatically re-issue fresh auth cookies!
+              setAuthCookies(res, user, { refreshJti: refreshPayload.jti });
+              req.user = { id: user.id, email: user.email, name: user.name, imageUrl: user.imageUrl };
+              return next();
             }
           }
         } catch (e) {

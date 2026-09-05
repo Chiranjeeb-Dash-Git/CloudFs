@@ -2,6 +2,27 @@ const API_BASE = ""; // Relative path to use Next.js proxy (fixes cookie issues 
 
 export type ApiError = { error: { code: string; message: string } };
 
+let refreshingPromise: Promise<boolean> | null = null;
+
+async function refreshTokenIfNeeded(): Promise<boolean> {
+  if (!refreshingPromise) {
+    refreshingPromise = (async () => {
+      try {
+        const refreshRes = await fetch(`${API_BASE}/api/auth/refresh`, {
+          method: "POST",
+          credentials: "include",
+        });
+        return refreshRes.ok;
+      } catch {
+        return false;
+      } finally {
+        refreshingPromise = null;
+      }
+    })();
+  }
+  return refreshingPromise;
+}
+
 async function request<T>(path: string, init?: RequestInit, isRetry = false): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     credentials: "include",
@@ -10,16 +31,9 @@ async function request<T>(path: string, init?: RequestInit, isRetry = false): Pr
   });
 
   if (res.status === 401 && !isRetry && !path.includes("/login") && !path.includes("/register") && !path.includes("/refresh")) {
-    try {
-      const refreshRes = await fetch(`${API_BASE}/api/auth/refresh`, {
-        method: "POST",
-        credentials: "include",
-      });
-      if (refreshRes.ok) {
-        return request<T>(path, init, true);
-      }
-    } catch {
-      // Ignore
+    const refreshed = await refreshTokenIfNeeded();
+    if (refreshed) {
+      return request<T>(path, init, true);
     }
   }
 

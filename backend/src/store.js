@@ -156,6 +156,34 @@ export function createMemoryStore() {
         }
       }
       return null;
+    },
+    findFile: async (id) => {
+      let f = files.find((x) => x.id === id);
+      if (f) return f;
+      if (pool) {
+        const res = await pool.query("SELECT * FROM files WHERE id = $1", [id]);
+        if (res.rows[0]) {
+          const item = toCamelCase(res.rows[0]);
+          const proxied = makePersistedObject(item, "files", "id");
+          files.push(proxied);
+          return proxied;
+        }
+      }
+      return null;
+    },
+    findFolder: async (id) => {
+      let f = folders.find((x) => x.id === id);
+      if (f) return f;
+      if (pool) {
+        const res = await pool.query("SELECT * FROM folders WHERE id = $1", [id]);
+        if (res.rows[0]) {
+          const item = toCamelCase(res.rows[0]);
+          const proxied = makePersistedObject(item, "folders", "id");
+          folders.push(proxied);
+          return proxied;
+        }
+      }
+      return null;
     }
   };
 }
@@ -417,5 +445,11 @@ if (process.env.DATABASE_URL) {
   }
 
   // Trigger async db synchronization
-  connectAndSync();
+  storeReadyPromise = connectAndSync();
+}
+
+let storeReadyPromise = null;
+
+export function ensureStoreReady() {
+  return storeReadyPromise || Promise.resolve();
 }
