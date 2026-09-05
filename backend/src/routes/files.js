@@ -68,13 +68,14 @@ filesRouter.post("/init", requireAuth, (req, res, next) => {
     };
     mem.files.push(file);
     const origin = `${req.protocol}://${req.get("host")}`;
+    const bytesUrl = `/api/files/${fileId}/bytes`;
     res.status(201).json({
       fileId,
       storageKey,
       upload: {
         method: "put",
-        url: `${origin}/api/files/${fileId}/bytes`,
-        parts: [{ partNumber: 1, url: `${origin}/api/files/${fileId}/bytes` }],
+        url: bytesUrl,
+        parts: [{ partNumber: 1, url: bytesUrl }],
         expiresInSeconds: 3600,
       },
     });
@@ -278,7 +279,13 @@ filesRouter.get("/:id/download", async (req, res, next) => {
     // Allow access if either authenticated OR valid signed URL token is present
     let hasAccess = false;
     try {
-      requireAuth(req, res, () => { hasAccess = true; });
+      await new Promise((resolve, reject) => {
+        requireAuth(req, res, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      hasAccess = true;
     } catch (e) {
       // Not authenticated, check signed token
     }
@@ -369,7 +376,13 @@ filesRouter.get("/:id/thumbnail", async (req, res, next) => {
     // Allow access if either authenticated OR valid signed URL token is present
     let hasAccess = false;
     try {
-      requireAuth(req, res, () => { hasAccess = true; });
+      await new Promise((resolve, reject) => {
+        requireAuth(req, res, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      hasAccess = true;
     } catch (e) {
       // Not authenticated
     }

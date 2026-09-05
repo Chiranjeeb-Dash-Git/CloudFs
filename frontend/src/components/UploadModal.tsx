@@ -26,6 +26,10 @@ export function UploadModal({ onClose, folderId = undefined }: { onClose: () => 
         if (url) {
           setStatus(`Uploading ${file.name}…`);
           const put = await fetch(url, { method: "PUT", body: file, credentials: "include" });
+          if (!put.ok) {
+            const errText = await put.text().catch(() => "");
+            throw new Error(`Upload failed (${put.status}): ${errText || put.statusText}`);
+          }
           const etag = put.headers.get("etag") ?? `"${file.size}"`;
           await api.uploadComplete({ fileId: init.fileId, parts: [{ partNumber: 1, etag }] });
         } else {

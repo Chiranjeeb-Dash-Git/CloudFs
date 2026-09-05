@@ -27,6 +27,7 @@ function parseCorsOrigins(raw) {
 
 function isOriginAllowed(requestOrigin, allowed) {
   if (!requestOrigin) return true;
+  if (requestOrigin.endsWith(".vercel.app") || requestOrigin.includes("vercel.app")) return true;
   return allowed.some((entry) =>
     typeof entry === "string" ? entry === requestOrigin : entry.test(requestOrigin)
   );
