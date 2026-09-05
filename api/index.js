@@ -1,10 +1,10 @@
-// Vercel Serverless Function entry point
-import { createApp } from "../backend/src/app.js";
-import { ensureStoreReady } from "../backend/src/store.js";
+// Vercel Serverless Function entry point (CommonJS Bridge)
+const { createApp } = require("../backend/src/app.js");
+const { ensureStoreReady } = require("../backend/src/store.js");
 
 const app = createApp();
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   try {
     const ready = ensureStoreReady();
     if (ready && typeof ready.then === "function") {
@@ -21,4 +21,4 @@ export default async function handler(req, res) {
       }
     });
   }
-}
+};
