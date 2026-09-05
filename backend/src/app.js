@@ -73,6 +73,9 @@ export function createApp() {
   app.get("/health", (_req, res) =>
     res.json({ ok: true, service: "cloudfs-api", version: "1.1.0" }),
   );
+  app.get("/api/health", (_req, res) =>
+    res.json({ ok: true, service: "cloudfs-api", version: "1.1.0" }),
+  );
 
   // Auth (register/login/logout/refresh/me/google/change-password)
   app.use("/api/auth", authRouter);
