@@ -193,6 +193,7 @@ export const mem = createMemoryStore();
 // Setup PostgreSQL pool if DATABASE_URL is configured
 export let pool = null;
 let isInitialLoad = false;
+let storeReadyPromise = null;
 
 if (process.env.DATABASE_URL) {
   console.log("DATABASE_URL is set. Initializing PostgreSQL pool...");
@@ -452,8 +453,6 @@ if (process.env.DATABASE_URL) {
   // Trigger async db synchronization
   storeReadyPromise = connectAndSync();
 }
-
-let storeReadyPromise = null;
 
 export function ensureStoreReady() {
   return storeReadyPromise || Promise.resolve();
