@@ -82,7 +82,8 @@ async function handle(req: NextRequest) {
         try {
           cachedApp(mockReq, mockRes);
         } catch (err: any) {
-          resolve(NextResponse.json({ error: { code: "EXPRESS_ERR", message: err.message } }, { status: 500 }));
+          console.error("Express App Handler Exception:", err);
+          resolve(NextResponse.json({ error: { code: "EXPRESS_ERR", message: err.message, stack: err.stack } }, { status: 500 }));
         }
       };
 
@@ -96,7 +97,8 @@ async function handle(req: NextRequest) {
       }
     });
   } catch (outerErr: any) {
-    return NextResponse.json({ error: { code: "BRIDGE_ERR", message: outerErr.message } }, { status: 500 });
+    console.error("Route Handler Outer Exception:", outerErr);
+    return NextResponse.json({ error: { code: "BRIDGE_ERR", message: outerErr.message, stack: outerErr.stack } }, { status: 500 });
   }
 }
 
