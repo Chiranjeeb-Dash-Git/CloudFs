@@ -7,6 +7,21 @@ let storeReadyPromise = null;
 module.exports = async (req, res) => {
   try {
     if (!cachedApp) {
+      // Explicitly require backend dependencies to guarantee Vercel NFT bundles them
+      try {
+        require("express");
+        require("cors");
+        require("helmet");
+        require("cookie-parser");
+        require("express-rate-limit");
+        require("pg");
+        require("bcryptjs");
+        require("jsonwebtoken");
+        require("zod");
+      } catch (e) {
+        // Fallback if lazily loaded
+      }
+
       // Dynamically import the ESM backend
       const { createApp } = await import("../backend/src/app.js");
       const { ensureStoreReady } = await import("../backend/src/store.js");
