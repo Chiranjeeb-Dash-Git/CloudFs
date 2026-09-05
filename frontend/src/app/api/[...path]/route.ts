@@ -54,6 +54,21 @@ async function handle(req: NextRequest) {
         return mockRes;
       };
       mockRes.hasHeader = (name: string) => resHeaders.has(name);
+      mockRes.cookie = (name: string, val: string, options: any = {}) => {
+        let cookieStr = `${name}=${encodeURIComponent(val)}`;
+        if (options.maxAge) cookieStr += `; Max-Age=${Math.floor(options.maxAge / 1000)}`;
+        if (options.expires) cookieStr += `; Expires=${options.expires.toUTCString()}`;
+        if (options.path) cookieStr += `; Path=${options.path}`;
+        if (options.domain) cookieStr += `; Domain=${options.domain}`;
+        if (options.secure) cookieStr += `; Secure`;
+        if (options.httpOnly) cookieStr += `; HttpOnly`;
+        if (options.sameSite) cookieStr += `; SameSite=${options.sameSite}`;
+        resHeaders.append("Set-Cookie", cookieStr);
+        return mockRes;
+      };
+      mockRes.clearCookie = (name: string, options: any = {}) => {
+        return mockRes.cookie(name, "", { ...options, maxAge: 0, expires: new Date(0) });
+      };
       mockRes.writeHead = (code: number, headersObj?: any) => {
         statusCode = code;
         mockRes.statusCode = code;
