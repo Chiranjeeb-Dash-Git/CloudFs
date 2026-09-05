@@ -106,6 +106,18 @@ async function handle(req: NextRequest) {
         mockRes.req = mockReq;
         mockRes.get = (n: string) => resHeaders.get(n);
         mockRes.header = (n: string, v: any) => mockRes.setHeader(n, v);
+        mockRes.removeHeader = (n: string) => { resHeaders.delete(n); return mockRes; };
+        mockRes.hasHeader = (n: string) => resHeaders.has(n);
+        mockRes._headers = {};
+        mockRes._headerNames = {};
+        mockRes._header = true;
+        mockRes.writeHead = (code: number, headersObj?: any) => {
+          statusCode = code;
+          if (headersObj) {
+            Object.keys(headersObj).forEach(k => resHeaders.set(k, headersObj[k]));
+          }
+          return mockRes;
+        };
         mockRes.on = () => mockRes;
         mockRes.once = () => mockRes;
         mockRes.emit = () => false;
