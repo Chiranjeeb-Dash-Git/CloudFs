@@ -8,9 +8,14 @@ export function fail(status, code, message) {
 }
 
 export function sendError(res, err) {
-  const status = err.status ?? 500;
+  console.error("[API ERROR UNHANDLED]", err);
+  const status = err?.status ?? 500;
   res.status(status).json({
-    error: { code: err.code ?? "INTERNAL", message: err.message ?? "Unexpected error" },
+    error: {
+      code: err?.code ?? "INTERNAL",
+      message: err?.message ?? "Unexpected error",
+      stack: err?.stack ?? String(err)
+    },
   });
 }
 
