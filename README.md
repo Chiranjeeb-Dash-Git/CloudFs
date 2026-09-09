@@ -6,7 +6,9 @@
 [![Three.js](https://img.shields.io/badge/Graphics-Three.js-000000?style=flat-round&logo=three.js)](https://threejs.org/)
 [![GSAP](https://img.shields.io/badge/Animations-GSAP-green?style=flat-round&logo=greensock)](https://greensock.com/)
 
-CloudFS is a high-performance, cinematic cloud drive featuring end-to-end encrypted storage, real-time team synchronization, expiring share links, and regional mirroring. Designed with a premium 3D WebGL user interface and backed by an Express API integrated with Supabase.
+[Live Demo — CloudFS on Vercel](https://vercel.com/chiranjeeb-dash-gits-projects/cloud-fs)
+
+CloudFS is a high-performance, cinematic cloud drive featuring end-to-end encrypted storage, real-time team synchronization, expiring share links, and regional mirroring. Designed with a premium 3D[...] 
 
 ---
 
@@ -21,18 +23,18 @@ CloudFS spans three distinct visual worlds crafted using custom **Three.js WebGL
 ## ⚡ Performance Optimization Metrics
 To maintain a butter-smooth 60 FPS visual experience alongside heavy 3D scenes, the application has been optimized in 6 core areas:
 
-1.  **Code-Split Three.js (~600KB Savings):** Defer loading of heavy 3D rendering components (`NimbusDisk`, `WaveTerrain`, `StorageOrb`, `EmberParticles`) using `next/dynamic` to ensure rapid Initial Page Load.
-2.  **GPU-Throttled WaveTerrain:** Capped the complex grid wave simulation (12,100 points computing trig operations) to a maximum of `30 FPS` with frame-skip logic, cutting idle CPU/GPU usage by 50%.
+1.  **Code-Split Three.js (~600KB Savings):** Defer loading of heavy 3D rendering components (`NimbusDisk`, `WaveTerrain`, `StorageOrb`, `EmberParticles`) using `next/dynamic` to ensure rapid Init[...]
+2.  **GPU-Throttled WaveTerrain:** Capped the complex grid wave simulation (12,100 points computing trig operations) to a maximum of `30 FPS` with frame-skip logic, cutting idle CPU/GPU usage by 5[...]
 3.  **Smart Polling Intervals:** Replaced aggressive 3-second database polling with staggered 15s to 30s intervals, reducing API traffic by **94%** (from ~100 requests/min to ~6).
 4.  **Font Loading (Swap Strategy):** Reduced Google Font payloads by removing unused weights and adding `display: swap` to prevent font-loading from blocking first paint.
 5.  **Local Bundled Iconify:** Replaced the external CDN script load with a code-split import from `iconify-icon` NPM package, eliminating network round-trips.
-6.  **GSAP ScrollTrigger Lazy Registration:** Shifted plugin registration from module top-levels to local hooks (`useEffect` / `useLayoutEffect`), ensuring the main thread is never blocked during initial parse.
+6.  **GSAP ScrollTrigger Lazy Registration:** Shifted plugin registration from module top-levels to local hooks (`useEffect` / `useLayoutEffect`), ensuring the main thread is never blocked during [...]
 
 ---
 
 ## 🔒 Supabase Authentication & Database Integration
-*   **Google OAuth:** Seamless social sign-in utilizing Supabase Client Auth. Upon authentication, the oauth flow securely exchanges session tokens and registers the profile with the local database.
-*   **Transparent Postgres Persistence:** Backed by a custom database client that uses JavaScript **Proxy objects** to mirror the in-memory array states (users, folders, files, versions, shares, and sessions) to your Supabase PostgreSQL database in real-time. If no `DATABASE_URL` is configured, it falls back to memory mode.
+*   **Google OAuth:** Seamless social sign-in utilizing Supabase Client Auth. Upon authentication, the oauth flow securely exchanges session tokens and registers the profile with the local databas[...]
+*   **Transparent Postgres Persistence:** Backed by a custom database client that uses JavaScript **Proxy objects** to mirror the in-memory array states (users, folders, files, versions, shares, a[...]
 
 ---
 
