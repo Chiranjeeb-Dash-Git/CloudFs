@@ -200,24 +200,6 @@ npm run dev
 
 ---
 
-## Screenshots & Visuals
-
-I've added placeholders in `/docs/screenshots/` for these files (commit will reference them). Please upload real images or GIFs and I will commit them into `/docs/screenshots/` and update the README links:
-
-- `/docs/screenshots/demo.gif` (animated demo/gif)
-- `/docs/screenshots/landing.png`
-- `/docs/screenshots/dashboard.png`
-
-Placeholder previews (these files do not yet exist):
-
-![Landing Screenshot](/docs/screenshots/landing.png)
-
-![Dashboard Screenshot](/docs/screenshots/dashboard.png)
-
-If you provide image URLs here I can fetch and commit them for you.
-
----
-
 ## Contributing
 
 Contributions welcome! Please open issues or pull requests for bug fixes and features. Follow the code style and include tests where relevant.
