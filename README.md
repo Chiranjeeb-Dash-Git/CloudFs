@@ -21,7 +21,6 @@ A cinematic, secure cloud file storage and sharing web app with polished animati
 - [Challenges & How I Solved Them](#challenges--how-i-solved-them)
 - [Performance & Optimizations](#performance--optimizations)
 - [Setup & Launch (Local)](#setup--launch-local)
-- [Screenshots & Visuals](#screenshots--visuals)
 - [Contributing](#contributing)
 - [License](#license)
 
