@@ -2,6 +2,8 @@
 
 [![Frontend: Next.js 14](https://img.shields.io/badge/Frontend-Next.js%2014-black?style=flat-round&logo=next.js)](https://nextjs.org/) [![Backend: Express](https://img.shields.io/badge/Backend-Express.js-000000?style=flat-round&logo=express)](https://expressjs.com/) [![Database: Supabase](https://img.shields.io/badge/Database-Supabase-3ecf8e?style=flat-round&logo=supabase)](https://supabase.com/) [![Three.js](https://img.shields.io/badge/Graphics-Three.js-000000?style=flat-round&logo=three.js)](https://threejs.org/) [![GSAP](https://img.shields.io/badge/Animations-GSAP-green?style=flat-round&logo=greensock)](https://greensock.com/)
 
+[![Live on Vercel](https://img.shields.io/badge/Live-Vercel-black?style=flat&logo=vercel)](https://cloud-fs-ten.vercel.app/)
+
 [Live Demo — Open CloudFS](https://cloud-fs-ten.vercel.app/)
 
 A cinematic, secure cloud file storage and sharing web app with polished animations, granular sharing controls, teams & permissions, and scalable storage. Think “Google Drive core” with a clean UI, strong access controls, and a focus on performance and visuals.
@@ -43,6 +45,8 @@ This repository contains the full-stack code: a Next.js frontend (UI + WebGL/GSA
 Open the live app with the full animations and interactions:
 
 > https://cloud-fs-ten.vercel.app/
+
+![Demo GIF Preview](/docs/screenshots/demo.gif)
 
 Tip: Use Google OAuth (Supabase) to sign in and explore dashboard-only features.
 
@@ -198,13 +202,19 @@ npm run dev
 
 ## Screenshots & Visuals
 
-(Replace these placeholders with real screenshots or GIFs saved to `/docs/screenshots/` in the repo.)
+I've added placeholders in `/docs/screenshots/` for these files (commit will reference them). Please upload real images or GIFs and I will commit them into `/docs/screenshots/` and update the README links:
+
+- `/docs/screenshots/demo.gif` (animated demo/gif)
+- `/docs/screenshots/landing.png`
+- `/docs/screenshots/dashboard.png`
+
+Placeholder previews (these files do not yet exist):
 
 ![Landing Screenshot](/docs/screenshots/landing.png)
 
 ![Dashboard Screenshot](/docs/screenshots/dashboard.png)
 
-If you want, I can add the screenshots to the repository for you — upload the images or point me to direct image URLs and I'll commit them and update these links.
+If you provide image URLs here I can fetch and commit them for you.
 
 ---
 
