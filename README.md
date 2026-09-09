@@ -45,7 +45,7 @@ Open the live app with the full animations and interactions:
 
 > https://cloud-fs-ten.vercel.app/
 
-![Demo GIF Preview](/docs/screenshots/demo.gif)
+![Landing Screenshot](/docs/screenshots/landing.png)
 
 Tip: Use Google OAuth (Supabase) to sign in and explore dashboard-only features.
 
@@ -103,20 +103,125 @@ Security notes
 
 ## Architecture & Data Flow
 
+Below are clearer, developer-focused diagrams that summarize how CloudFS is organized at runtime, how uploads flow from client to storage, and the core data model. These diagrams are based on the backend spec and the frontend app structure in `frontend/src`.
+
+### 1) System overview (high level)
+
 ```mermaid
-graph TD
-  Browser((Browser)) -->|Next.js (React)| Frontend[Next.js App]
-  Frontend -->|REST / RPC| API[Express API Server]
-  Frontend -->|Supabase Auth| SupabaseAuth[(Supabase Auth)]
-  API -->|Reads/Writes| Postgres[(Supabase Postgres DB)]
-  API -->|Saves objects| Storage[(S3 / Object Storage)]
-  API -->|Cache| Redis[(optional Redis Cache)]
-  Postgres -->|Realtime events| Frontend
+flowchart LR
+  Browser["Browser (Next.js Client)"] -->|HTTPS| Vercel["Vercel / CDN (Frontend)"]
+  Vercel -->|API calls| APIGW["API Gateway / Reverse Proxy"]
+  APIGW -->|JSON / Auth| API["Express API Server (backend)"]
+  API -->|Reads/Writes| Postgres[("Supabase Postgres DB")]
+  API -->|Signed URLs / Multipart| Storage[("S3 / Supabase Storage")]
+  API -->|Enqueue| Redis[("Redis + BullMQ (Workers)")]
+  Redis -->|Worker jobs| Workers[("Thumbnail/Jobs Worker")]
+  Frontend -->|Auth| SupabaseAuth[("Supabase Auth (OAuth/JWT)")]
+  Workers -->|Store previews| Storage
+  Storage -->|CDN| CDN[("CDN / Edge (optional)")]
+  API -->|Cache| Redis
+  Postgres -->|Realtime| Frontend
 ```
 
 Notes:
-- Uploads use multipart and presigned flows for large files when using S3.
-- Realtime cues are delivered via Supabase Realtime or webhooks to connected clients to show collaborator activity.
+- Vercel serves the Next.js app and static assets; dynamic requests reach the API Gateway which routes to the Express backend.
+- Supabase Auth is the identity provider; the frontend holds short-lived sessions and the backend verifies JWTs on every protected route.
+- Storage is used for objects (files, previews); the API issues presigned URLs when appropriate so clients upload directly to the object store.
+- Workers (BullMQ) process CPU-bound tasks (thumbnails, transcoding) and write artifacts back to storage and DB.
+
+---
+
+### 2) Upload flow (sequence)
+
+```mermaid
+sequenceDiagram
+  participant U as User (Browser)
+  participant F as Frontend (Next.js)
+  participant A as API (Express)
+  participant S as Storage (S3 / Supabase Storage)
+  participant DB as Postgres
+  participant W as Worker (BullMQ)
+
+  U->>F: Select file & click upload
+  F->>A: POST /api/files/init { name, size, mimeType, folderId }
+  A->>DB: create files row (status: uploading)
+  A->>S: request presigned multipart upload / upload-id
+  A-->>F: return upload info (uploadId, presignedParts)
+  F->>S: upload parts directly to Storage (multipart)
+  F->>A: POST /api/files/complete { fileId, parts }
+  A->>S: verify parts / complete multipart
+  A->>DB: create file_versions row, update files (status: ready)
+  A->>W: enqueue thumbnail job (fileId, storageKey)
+  W->>S: read object, generate preview
+  W->>S: write preview to previews/ prefix
+  W->>DB: update file_versions with preview metadata
+  A-->>F: return { file, signedUrl }
+```
+
+Notes:
+- The design keeps heavy bytes off the API by uploading directly to the storage provider.
+- The backend maintains authoritative metadata and access control in Postgres.
+
+---
+
+### 3) Data model (ER sketch)
+
+```mermaid
+erDiagram
+    USERS ||--o{ FOLDERS : owns
+    FOLDERS ||--o{ FILES : contains
+    FILES ||--o{ FILE_VERSIONS : has
+    USERS ||--o{ SHARES : grants
+    FILES ||--o{ SHARES : shared_resource
+    FILES ||--o{ LINK_SHARES : link
+
+    USERS {
+      uuid id
+      text email
+      text name
+    }
+    FOLDERS {
+      uuid id
+      text name
+      uuid parent_id
+    }
+    FILES {
+      uuid id
+      text name
+      text storage_key
+      bigint size_bytes
+    }
+    FILE_VERSIONS {
+      uuid id
+      uuid file_id
+      int version_number
+      text storage_key
+    }
+    SHARES {
+      uuid id
+      text resource_type
+      uuid resource_id
+      uuid grantee_user_id
+    }
+    LINK_SHARES {
+      uuid id
+      text token
+      timestamptz expires_at
+    }
+```
+
+Notes:
+- The schema follows the backend spec: folders use adjacency list (parent_id) and breadcrumbs are built with recursive queries.
+- File versions are separate rows that point to immutable storage keys; the `files` table keeps the current active version pointer.
+
+---
+
+Developer checklist (for README / docs update)
+- [x] Replace the simple mermaid diagram with the three diagrams above (system overview, upload sequence, ER sketch).
+- [x] Add short explanatory notes and security/performance bullets.
+- [ ] (Optional) Add PNG/SVG exports of the diagrams under `/docs/diagrams/` for viewers that don't render mermaid. I can commit generated images if you want.
+
+If you want me to commit PNG/SVG renderings of these diagrams into `/docs/diagrams/` and update the README to reference them (improves GitHub render), reply and I will generate and push them.
 
 ---
 
