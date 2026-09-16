@@ -308,6 +308,8 @@ if (process.env.DATABASE_URL) {
 
   // Array push and splice tracking mutations
   function makePersistedArray(array, tableName, pkInfo) {
+    if (array.__isPersisted) return array;
+
     const originalPush = array.push;
     array.push = function (...items) {
       for (const item of items) {
@@ -337,11 +339,14 @@ if (process.env.DATABASE_URL) {
       return originalSplice.call(this, start, deleteCount, ...wrappedItems);
     };
 
+    Object.defineProperty(array, "__isPersisted", { value: true, writable: false });
     return array;
   }
 
   // Map set and delete tracking refresh tokens
   function makePersistedMap(map) {
+    if (map.__isPersisted) return map;
+
     const originalSet = map.set;
     map.set = function (key, value) {
       const result = originalSet.call(this, key, value);
@@ -362,6 +367,7 @@ if (process.env.DATABASE_URL) {
       return result;
     };
 
+    Object.defineProperty(map, "__isPersisted", { value: true, writable: false });
     return map;
   }
 
@@ -424,6 +430,7 @@ if (process.env.DATABASE_URL) {
             : `SELECT * FROM ${t.name}`;
             
           const res = await pool.query(query);
+          mem[t.key].length = 0;
           for (const row of res.rows) {
             const item = toCamelCase(row);
             const proxiedItem = makePersistedObject(item, t.name, t.pk);
