@@ -38,18 +38,21 @@ export default function FilesPage() {
   const { data: storageData } = useQuery({
     queryKey: ["storage"],
     queryFn: api.storage,
+    enabled: !!meData && !meError,
     refetchInterval: 30_000,
   });
 
   const { data: recentData } = useQuery({
     queryKey: ["recent"],
     queryFn: api.recent,
+    enabled: !!meData && !meError,
     refetchInterval: 15_000,
   });
 
   const { data: searchData } = useQuery({
     queryKey: ["search", ""],
     queryFn: () => api.search(""),
+    enabled: !!meData && !meError,
     refetchInterval: 30_000,
   });
 
@@ -238,7 +241,7 @@ export default function FilesPage() {
 
         {/* File Browser Component */}
         <section className="my-12">
-          <FileBrowser />
+          <FileBrowser authReady={!!meData && !meError} />
         </section>
 
         {/* Editorial statement band */}

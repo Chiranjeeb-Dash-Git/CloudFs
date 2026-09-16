@@ -35,6 +35,9 @@ function isOriginAllowed(requestOrigin, allowed) {
 
 export function createApp() {
   const app = express();
+  // Requests arrive through Vercel's proxy. Trust the first proxy hop so
+  // express-rate-limit and request metadata use the real forwarded client IP.
+  app.set("trust proxy", 1);
   const allowedOrigins = parseCorsOrigins(process.env.CORS_ORIGIN);
 
   app.use(

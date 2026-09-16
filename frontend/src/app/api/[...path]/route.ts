@@ -15,7 +15,12 @@ async function handle(req: NextRequest) {
     
     const ready = ensureStoreReady();
     if (ready && typeof ready.then === "function") {
-      await ready;
+      // A failed or cold database must not leave every page in an infinite
+      // loading state. The backend can still serve cached/in-memory data.
+      await Promise.race([
+        ready,
+        new Promise((resolve) => setTimeout(resolve, 8_000)),
+      ]);
     }
 
     return new Promise<NextResponse>((resolve) => {

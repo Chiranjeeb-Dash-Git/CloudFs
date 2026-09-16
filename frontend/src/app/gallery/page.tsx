@@ -192,55 +192,28 @@ function burstConfetti(x: number, y: number) {
 function FileThumbnail({ fileId, type, name, seed }: { fileId: string; type: string; name: string; seed: number }) {
   const [src, setSrc] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
   useEffect(() => {
     if (type !== "photo") return;
-
-    let active = true;
-    let objectUrl: string | null = null;
-
-    async function load() {
-    try {
-      const res = await fetch(`/api/files/${fileId}/thumbnail`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("failed");
-
-      const contentType = res.headers.get("content-type") || "";
-      if (contentType.includes("application/json")) {
-        // If the thumbnail is a JSON placeholder, fallback to the full download URL
-        if (active) {
-          setSrc(`/api/files/${fileId}/download`);
-        }
-        return;
-      }
-
-        const blob = await res.blob();
-        if (active) {
-          objectUrl = URL.createObjectURL(blob);
-          setSrc(objectUrl);
-        }
-      } catch (err) {
-        if (active) {
-          // Fallback to full download URL on error or if no thumbnail exists
-          setSrc(`/api/files/${fileId}/download`);
-        }
-      }
-    }
-
-    load();
-
-    return () => {
-      active = false;
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
-    };
-  }, [fileId, type, API_BASE]);
+    setSrc(`/api/files/${fileId}/thumbnail`);
+  }, [fileId, type]);
 
   if (type === "photo" && src) {
-    return <img src={src} alt={name} className="w-full h-full object-cover block" />;
+    return (
+      <img
+        src={src}
+        alt={name}
+        loading="lazy"
+        decoding="async"
+        className="w-full h-full object-cover block"
+        onError={(event) => {
+          const image = event.currentTarget;
+          if (!image.src.endsWith(`/api/files/${fileId}/download`)) {
+            image.src = `/api/files/${fileId}/download`;
+          }
+        }}
+      />
+    );
   }
 
   if (type === "video") {
@@ -270,13 +243,10 @@ function FileThumbnail({ fileId, type, name, seed }: { fileId: string; type: str
   }
 
   if (type === "pdf") {
-    const downloadUrl = `/api/files/${fileId}/download?inline=true`;
     return (
-      <div className="w-full h-full overflow-hidden bg-white relative pointer-events-none select-none">
-        <iframe 
-          src={`${downloadUrl}#toolbar=0&navpanes=0&scrollbar=0`} 
-          className="w-[200%] h-[200%] border-0 absolute top-0 left-0 origin-top-left scale-[0.5]" 
-        />
+      <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-red-950/50 to-zinc-950 text-white/70">
+        <span className="text-5xl text-red-300/80">{ICONS.pdf}</span>
+        <span className="font-mono text-[10px] tracking-widest uppercase">PDF · click to preview</span>
       </div>
     );
   }
@@ -848,14 +818,16 @@ export default function GalleryPage() {
   const { data: searchData } = useQuery({
     queryKey: ["search", ""],
     queryFn: () => api.search(""),
-    refetchInterval: 3000,
+    enabled: !!meData && !meError,
+    refetchInterval: 30_000,
   });
 
   // Fetch storage stats
   const { data: storageData } = useQuery({
     queryKey: ["storage"],
     queryFn: api.storage,
-    refetchInterval: 5000,
+    enabled: !!meData && !meError,
+    refetchInterval: 30_000,
   });
 
   const files: FileItem[] = (searchData?.results ?? [])

@@ -70,12 +70,14 @@ export default function DashboardPage() {
   const { data: storageData } = useQuery({
     queryKey: ["storage"],
     queryFn: api.storage,
+    enabled: !!meData && !meError,
     refetchInterval: 30_000,
   });
 
   const { data: recentData } = useQuery({
     queryKey: ["recent"],
     queryFn: api.recent,
+    enabled: !!meData && !meError,
     refetchInterval: 15_000,
   });
 

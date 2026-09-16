@@ -61,7 +61,7 @@ function FolderTreeItem({ folder, allFolders, currentId, onSelect, depth = 0 }: 
   );
 }
 
-export function FileBrowser() {
+export function FileBrowser({ authReady = false }: { authReady?: boolean }) {
   const ui = useDriveUi();
   const queryClient = useQueryClient();
   const [currentFolderId, setCurrentFolderId] = useState<string>("root");
@@ -79,11 +79,13 @@ export function FileBrowser() {
   const { data: treeData } = useQuery({
     queryKey: ["folderTree"],
     queryFn: api.folderTree,
+    enabled: authReady,
   });
 
   const { data: folderData, isLoading } = useQuery({
     queryKey: ["folder", currentFolderId],
     queryFn: () => api.folder(currentFolderId),
+    enabled: authReady,
   });
 
   // Handle outside clicks to close menus
@@ -121,6 +123,7 @@ export function FileBrowser() {
       setUploadStatus("Upload complete!");
       setTimeout(() => setUploadStatus(""), 3000);
       queryClient.invalidateQueries({ queryKey: ["folder", currentFolderId] });
+      queryClient.invalidateQueries({ queryKey: ["search"] });
       queryClient.invalidateQueries({ queryKey: ["recent"] });
       queryClient.invalidateQueries({ queryKey: ["storage"] });
     } catch (err) {
