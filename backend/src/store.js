@@ -28,6 +28,9 @@ function snakeToCamel(str) {
 
 function toSnakeCase(obj) {
   if (obj === null || obj === undefined || typeof obj !== "object") return obj;
+  // PostgreSQL BYTEA values must remain binary parameters. Recursing through a
+  // Buffer turns file contents into a numeric object and silently loses data.
+  if (Buffer.isBuffer(obj) || obj instanceof Uint8Array) return obj;
   if (Array.isArray(obj)) return obj.map(toSnakeCase);
   if (obj instanceof Date) return obj;
   const result = {};
@@ -44,6 +47,7 @@ function toSnakeCase(obj) {
 
 function toCamelCase(obj) {
   if (obj === null || obj === undefined || typeof obj !== "object") return obj;
+  if (Buffer.isBuffer(obj) || obj instanceof Uint8Array) return obj;
   if (Array.isArray(obj)) return obj.map(toCamelCase);
   const result = {};
   for (const key of Object.keys(obj)) {

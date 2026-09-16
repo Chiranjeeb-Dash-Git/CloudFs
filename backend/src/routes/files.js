@@ -67,6 +67,16 @@ filesRouter.post("/init", requireAuth, async (req, res, next) => {
       updatedAt: mem.now(),
     };
     mem.files.push(file);
+    if (pool) {
+      // mem.files.push persists asynchronously for the in-memory cache. Await
+      // the durable row here so a fast upload cannot race its metadata insert.
+      await pool.query(
+        `INSERT INTO files (id, name, mime_type, size_bytes, storage_key, owner_id, folder_id, version_id, checksum, status, is_deleted, deleted_at, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, size_bytes = EXCLUDED.size_bytes, status = EXCLUDED.status, updated_at = EXCLUDED.updated_at`,
+        [file.id, file.name, file.mimeType, file.sizeBytes, file.storageKey, file.ownerId, file.folderId, file.versionId, file.checksum, file.status, file.isDeleted, file.deletedAt, file.createdAt, file.updatedAt],
+      );
+    }
     const origin = `${req.protocol}://${req.get("host")}`;
     const bytesUrl = `/api/files/${fileId}/bytes`;
     res.status(201).json({
@@ -130,8 +140,13 @@ filesRouter.put("/:id/bytes", requireAuth, async (req, res, next) => {
         };
         mem.versions.push(newVersion);
         file.versionId = versionId;
+        await pool.query(
+          `INSERT INTO file_versions (id, file_id, version_number, storage_key, size_bytes, checksum, file_data, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           ON CONFLICT (id) DO UPDATE SET size_bytes = EXCLUDED.size_bytes, checksum = EXCLUDED.checksum, file_data = EXCLUDED.file_data`,
+          [newVersion.id, newVersion.fileId, newVersion.versionNumber, newVersion.storageKey, newVersion.sizeBytes, newVersion.checksum, newVersion.fileData, newVersion.createdAt],
+        );
         await pool.query("UPDATE files SET version_id = $1 WHERE id = $2", [versionId, file.id]);
-        // Note: mem.versions.push already triggers dbInsert if not isInitialLoad
       }
     } else {
       // Fallback for memory-only mode
@@ -305,7 +320,8 @@ filesRouter.get("/:id/download", async (req, res, next) => {
     await assertRead(req.user?.id || file.ownerId, "file", req.params.id);
 
     // Try in-memory cache first, then query database
-    const version = mem.versions.find((v) => v.fileId === file.id);
+    const version = mem.versions.find((v) => v.id === file.versionId) ||
+      mem.versions.filter((v) => v.fileId === file.id).sort((a, b) => b.versionNumber - a.versionNumber)[0];
     let data = version?.fileData;
     if (!data && pool) {
       const dbRes = await pool.query("SELECT file_data FROM file_versions WHERE file_id = $1 ORDER BY version_number DESC LIMIT 1", [file.id]);
@@ -316,7 +332,7 @@ filesRouter.get("/:id/download", async (req, res, next) => {
     }
     if (!data) throw fail(404, "NOT_FOUND", "File data not found in database");
 
-    logActivity(req.user.id, "download", "file", file.id, {});
+    logActivity(req.user?.id || file.ownerId, "download", "file", file.id, {});
     res.setHeader("Content-Type", file.mimeType || "application/octet-stream");
     res.setHeader("Cache-Control", "private, max-age=60");
     if (req.query.inline === "true") {
@@ -408,7 +424,8 @@ filesRouter.get("/:id/thumbnail", async (req, res, next) => {
 
     await assertRead(req.user?.id || file.ownerId, "file", req.params.id);
 
-    const version = mem.versions.find((v) => v.fileId === file.id);
+    const version = mem.versions.find((v) => v.id === file.versionId) ||
+      mem.versions.filter((v) => v.fileId === file.id).sort((a, b) => b.versionNumber - a.versionNumber)[0];
     let data = version?.fileData;
     if (!data && pool) {
       const dbRes = await pool.query("SELECT file_data FROM file_versions WHERE file_id = $1 ORDER BY version_number DESC LIMIT 1", [file.id]);
