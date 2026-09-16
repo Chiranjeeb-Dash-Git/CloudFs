@@ -81,67 +81,94 @@ export async function GET(request: Request) {
       return redirectWithError("auth-no-user");
     }
 
+    // Extract Google profile data from Supabase user metadata
+    const rawName = supabaseUser.user_metadata?.full_name ?? supabaseUser.user_metadata?.name;
+    const rawAvatar = supabaseUser.user_metadata?.avatar_url ?? supabaseUser.user_metadata?.picture;
+    const rawSub = supabaseUser.user_metadata?.sub ?? supabaseUser.id;
+    const userEmail = (supabaseUser.email || "").toLowerCase();
+
+    // Call the backend's existing /api/auth/google endpoint via HTTP
+    // This avoids fragile cross-boundary imports of backend modules (pg, store, auth)
+    // that crash when the database is unreachable or modules can't be bundled by Next.js
+    let backendRes: Response;
     try {
-      const rawName = supabaseUser.user_metadata?.full_name ?? supabaseUser.user_metadata?.name;
-      const rawAvatar = supabaseUser.user_metadata?.avatar_url ?? supabaseUser.user_metadata?.picture;
-      const rawSub = supabaseUser.user_metadata?.sub ?? supabaseUser.id;
-      const userEmail = (supabaseUser.email || "").toLowerCase();
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), AUTH_CALLBACK_TIMEOUT_MS);
 
-      // Execute Google authentication directly in the Server Route without external network fetch
-      const { mem } = await import("../../../../../backend/src/store.js");
-      const { setAuthCookies, recordSession } = await import("../../../../../backend/src/auth.js");
-
-      let dbUser = await mem.findUser(null, rawSub);
-      if (!dbUser && userEmail) dbUser = await mem.findUser(null, null, userEmail);
-
-      if (!dbUser) {
-        dbUser = {
-          id: mem.id(),
+      backendRes = await fetch(`${apiBase}/api/auth/google`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           email: userEmail,
           name: rawName || userEmail.split("@")[0] || "User",
           imageUrl: rawAvatar || null,
-          passwordHash: null,
-          twoFactorEnabled: false,
-          twoFactorSecret: null,
-          providers: { google: { sub: rawSub, email: userEmail } },
-          quotaBytes: mem.DEFAULT_QUOTA_BYTES,
-          createdAt: mem.now(),
-        };
-        mem.users.push(dbUser);
-      } else {
-        dbUser.providers = { ...(dbUser.providers || {}), google: { sub: rawSub, email: userEmail } };
-        if (rawAvatar) dbUser.imageUrl = rawAvatar;
-        if (rawName) dbUser.name = rawName;
+          googleSub: rawSub,
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+    } catch (fetchErr: any) {
+      console.error("[auth/callback] Backend fetch error:", fetchErr);
+      if (fetchErr?.name === "AbortError") {
+        return redirectWithError("auth-backend-bridge-timeout");
       }
-
-      const finalRes = applyCookies(NextResponse.redirect(`${origin}${next}`));
-      
-      // Attach Express mock res to set cookies directly on NextResponse
-      const mockRes: any = {
-        cookie(name: string, val: string, options: any = {}) {
-          finalRes.cookies.set(name, val, {
-            httpOnly: options.httpOnly ?? true,
-            sameSite: options.sameSite ?? "lax",
-            secure: options.secure ?? true,
-            path: options.path ?? "/",
-            maxAge: options.maxAge ? Math.floor(options.maxAge / 1000) : undefined,
-          });
-        }
-      };
-
-      const jti = mem.id();
-      setAuthCookies(mockRes, dbUser, { refreshJti: jti });
-      recordSession(dbUser.id, request as any, jti);
-
-      return finalRes;
-    } catch (directAuthErr: any) {
-      console.error("[auth/callback] Direct Google auth error:", directAuthErr);
-      return redirectWithError(`auth-backend-bridge-500`);
+      return redirectWithError("auth-backend-bridge-unreachable");
     }
+
+    if (!backendRes.ok) {
+      const errBody = await backendRes.text().catch(() => "");
+      console.error("[auth/callback] Backend returned non-OK:", backendRes.status, errBody);
+      return redirectWithError("auth-backend-bridge-failed");
+    }
+
+    // Build the redirect response and forward the auth cookies set by the backend
+    const finalRes = applyCookies(NextResponse.redirect(`${origin}${next}`));
+
+    // Forward Set-Cookie headers from the backend response to the browser
+    const setCookieHeaders = backendRes.headers.getSetCookie?.() ?? [];
+    for (const rawCookie of setCookieHeaders) {
+      // Parse each Set-Cookie header and apply it to the NextResponse
+      const parsed = parseSetCookie(rawCookie);
+      if (parsed) {
+        finalRes.cookies.set(parsed.name, parsed.value, parsed.options);
+      }
+    }
+
+    return finalRes;
   } catch (topLevelErr: any) {
     console.error("[auth/callback] unexpected top-level error:", topLevelErr);
     return redirectWithError("auth-unexpected");
   }
+}
 
-  return redirectWithError("auth-unknown");
+/** Parse a raw Set-Cookie header string into name, value, and cookie options */
+function parseSetCookie(raw: string): { name: string; value: string; options: Record<string, any> } | null {
+  const parts = raw.split(";").map((s) => s.trim());
+  if (!parts[0]) return null;
+
+  const eqIdx = parts[0].indexOf("=");
+  if (eqIdx < 0) return null;
+
+  const name = parts[0].slice(0, eqIdx).trim();
+  const value = parts[0].slice(eqIdx + 1).trim();
+  const options: Record<string, any> = {};
+
+  for (let i = 1; i < parts.length; i++) {
+    const part = parts[i];
+    const lower = part.toLowerCase();
+    if (lower === "httponly") {
+      options.httpOnly = true;
+    } else if (lower === "secure") {
+      options.secure = true;
+    } else if (lower.startsWith("samesite=")) {
+      options.sameSite = part.split("=")[1]?.toLowerCase() as any;
+    } else if (lower.startsWith("path=")) {
+      options.path = part.split("=")[1];
+    } else if (lower.startsWith("max-age=")) {
+      options.maxAge = parseInt(part.split("=")[1] || "0", 10);
+    }
+  }
+
+  return { name, value, options };
 }

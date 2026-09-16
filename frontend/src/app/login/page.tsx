@@ -16,6 +16,7 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   "auth-backend-bridge-failed": "Google authenticated you, but your local drive session could not be started. Please try again.",
   "auth-backend-bridge-unreachable": "Could not reach the CloudFS backend. If you are running locally, ensure the backend is started on port 8080. In production, check your environment variables.",
   "auth-backend-bridge-timeout": "The CloudFS backend took too long to respond. Please try again.",
+  "auth-backend-bridge-500": "Google authenticated you, but the backend encountered an internal error. Please ensure the backend server is running and try again.",
   "auth-unexpected": "An unexpected error occurred during sign-in. Please try again.",
   "auth-unknown": "Sign-in failed without a specific reason. Please try again.",
   "auth-callback-failed": "Sign-in callback failed. Please try again.",
