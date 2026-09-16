@@ -534,6 +534,12 @@ filesRouter.delete("/:id", requireAuth, async (req, res, next) => {
     file.isDeleted = true;
     file.deletedAt = mem.now();
     file.updatedAt = mem.now();
+    if (pool) {
+      await pool.query(
+        "UPDATE files SET is_deleted = true, deleted_at = $1, updated_at = $2 WHERE id = $3",
+        [file.deletedAt, file.updatedAt, file.id],
+      );
+    }
     logActivity(req.user.id, "delete", "file", file.id, {});
     res.json({ ok: true });
   } catch (err) {
@@ -556,6 +562,13 @@ filesRouter.post("/bulk", requireAuth, async (req, res, next) => {
         if (body.action === "delete") {
           file.isDeleted = true;
           file.deletedAt = mem.now();
+          file.updatedAt = mem.now();
+          if (pool) {
+            await pool.query(
+              "UPDATE files SET is_deleted = true, deleted_at = $1, updated_at = $2 WHERE id = $3",
+              [file.deletedAt, file.updatedAt, file.id],
+            );
+          }
           logActivity(req.user.id, "delete", "file", id, { bulk: true });
         } else if (body.action === "move") {
           if (body.destinationId) await assertWrite(req.user.id, "folder", body.destinationId);

@@ -7,7 +7,7 @@ import {
   Folder, File, ChevronRight, ChevronDown, Plus, UploadCloud, 
   Trash2, Link2, Share2, Download, Edit2, MoreVertical, FileText, Image, Video, Music, ArrowUp, ArrowDown, Users, Star
 } from "lucide-react";
-import { api, DriveFile, DriveFolder } from "@/lib/api";
+import { api, DriveFile, DriveFolder, uploadBinary } from "@/lib/api";
 import { useDriveUi } from "@/components/DriveUi";
 
 function formatBytes(bytes: number, decimals = 1) {
@@ -67,6 +67,7 @@ export function FileBrowser({ authReady = false }: { authReady?: boolean }) {
   const [currentFolderId, setCurrentFolderId] = useState<string>("root");
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string>("");
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   
   // Sort state
   const [sortCol, setSortCol] = useState<"name" | "size" | "date">("name");
@@ -100,7 +101,8 @@ export function FileBrowser({ authReady = false }: { authReady?: boolean }) {
     if (!files.length) return;
     try {
       for (const file of Array.from(files)) {
-        setUploadStatus(`Uploading ${file.name}…`);
+        setUploadProgress(1);
+        setUploadStatus(`Preparing ${file.name}…`);
         const init = await api.uploadInit({
           name: file.name,
           mimeType: file.type || "application/octet-stream",
@@ -109,17 +111,14 @@ export function FileBrowser({ authReady = false }: { authReady?: boolean }) {
         });
         const url = init.upload.url ?? init.upload.parts?.[0]?.url;
         if (url) {
-          const put = await fetch(url, { method: "PUT", body: file, credentials: "include" });
-          if (!put.ok) {
-            const errText = await put.text().catch(() => "");
-            throw new Error(`Upload failed (${put.status}): ${errText || put.statusText}`);
-          }
-          const etag = put.headers.get("etag") ?? `"${file.size}"`;
-          await api.uploadComplete({ fileId: init.fileId, parts: [{ partNumber: 1, etag }] });
+          setUploadStatus(`Uploading ${file.name}…`);
+          const { etag } = await uploadBinary(url, file, setUploadProgress);
+          await api.uploadComplete({ fileId: init.fileId, parts: [{ partNumber: 1, etag: etag ?? `"${file.size}"` }] });
         } else {
           await api.uploadComplete({ fileId: init.fileId, parts: [] });
         }
       }
+      setUploadProgress(100);
       setUploadStatus("Upload complete!");
       setTimeout(() => setUploadStatus(""), 3000);
       queryClient.invalidateQueries({ queryKey: ["folder", currentFolderId] });
@@ -128,6 +127,7 @@ export function FileBrowser({ authReady = false }: { authReady?: boolean }) {
       queryClient.invalidateQueries({ queryKey: ["storage"] });
     } catch (err) {
       setUploadStatus(err instanceof Error ? err.message : "Upload failed");
+      setUploadProgress(null);
     }
   };
 
@@ -156,6 +156,9 @@ export function FileBrowser({ authReady = false }: { authReady?: boolean }) {
       else await api.deleteFolder(id);
       queryClient.invalidateQueries({ queryKey: ["folder", currentFolderId] });
       queryClient.invalidateQueries({ queryKey: ["folderTree"] });
+      queryClient.invalidateQueries({ queryKey: ["search"] });
+      queryClient.invalidateQueries({ queryKey: ["recent"] });
+      queryClient.invalidateQueries({ queryKey: ["storage"] });
     } catch (err) {
       console.error(err);
     }
@@ -274,7 +277,8 @@ export function FileBrowser({ authReady = false }: { authReady?: boolean }) {
 
         {uploadStatus && (
           <div className="bg-primary/20 border-b border-primary/40 px-4 py-2 text-xs font-mono text-primary flex items-center justify-between">
-            <span>{uploadStatus}</span>
+            <span>{uploadStatus}{uploadProgress !== null ? ` ${uploadProgress}%` : ""}</span>
+            {uploadProgress !== null && <div className="ml-4 h-1.5 w-32 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-primary transition-[width] duration-200" style={{ width: `${uploadProgress}%` }} /></div>}
           </div>
         )}
         

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { mem } from "../store.js";
+import { mem, pool } from "../store.js";
 import { camelFolder, camelFile, fail, sanitizeFilename } from "../util.js";
 import { requireAuth } from "../auth.js";
 import { assertRead, assertWrite, folderPath, getFolder, logActivity } from "../acl.js";
@@ -144,6 +144,12 @@ foldersRouter.delete("/:id", async (req, res, next) => {
     folder.isDeleted = true;
     folder.deletedAt = mem.now();
     folder.updatedAt = mem.now();
+    if (pool) {
+      await pool.query(
+        "UPDATE folders SET is_deleted = true, deleted_at = $1, updated_at = $2 WHERE id = $3",
+        [folder.deletedAt, folder.updatedAt, folder.id],
+      );
+    }
     logActivity(req.user.id, "delete", "folder", folder.id, {});
     res.json({ ok: true });
   } catch (err) {
@@ -158,7 +164,7 @@ const bulkSchema = z.object({
   destinationId: z.string().uuid().nullable().optional(),
 });
 
-foldersRouter.post("/bulk", (req, res, next) => {
+foldersRouter.post("/bulk", async (req, res, next) => {
   try {
     const body = bulkSchema.parse(req.body);
     const results = { ok: 0, failed: 0 };
@@ -172,6 +178,13 @@ foldersRouter.post("/bulk", (req, res, next) => {
         if (body.action === "delete") {
           folder.isDeleted = true;
           folder.deletedAt = mem.now();
+          folder.updatedAt = mem.now();
+          if (pool) {
+            await pool.query(
+              "UPDATE folders SET is_deleted = true, deleted_at = $1, updated_at = $2 WHERE id = $3",
+              [folder.deletedAt, folder.updatedAt, folder.id],
+            );
+          }
           logActivity(req.user.id, "delete", "folder", id, { bulk: true });
         } else if (body.action === "move") {
           if (body.destinationId) assertWrite(req.user.id, "folder", body.destinationId);

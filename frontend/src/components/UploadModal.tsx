@@ -2,20 +2,23 @@
 
 import { Upload } from "lucide-react";
 import { useState } from "react";
-import { api } from "@/lib/api";
+import { api, uploadBinary } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 
 export function UploadModal({ onClose, folderId = undefined }: { onClose: () => void, folderId?: string }) {
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(0);
   const queryClient = useQueryClient();
 
   async function handleFiles(files: FileList | null) {
     if (!files?.length) return;
     setBusy(true);
+    setProgress(0);
     try {
       for (const file of Array.from(files)) {
-        setStatus(`Init ${file.name}…`);
+        setStatus(`Preparing ${file.name}…`);
+        setProgress(1);
         const init = await api.uploadInit({
           name: file.name,
           mimeType: file.type || "application/octet-stream",
@@ -25,16 +28,12 @@ export function UploadModal({ onClose, folderId = undefined }: { onClose: () => 
         const url = init.upload.url ?? init.upload.parts?.[0]?.url;
         if (url) {
           setStatus(`Uploading ${file.name}…`);
-          const put = await fetch(url, { method: "PUT", body: file, credentials: "include" });
-          if (!put.ok) {
-            const errText = await put.text().catch(() => "");
-            throw new Error(`Upload failed (${put.status}): ${errText || put.statusText}`);
-          }
-          const etag = put.headers.get("etag") ?? `"${file.size}"`;
-          await api.uploadComplete({ fileId: init.fileId, parts: [{ partNumber: 1, etag }] });
+          const { etag } = await uploadBinary(url, file, setProgress);
+          await api.uploadComplete({ fileId: init.fileId, parts: [{ partNumber: 1, etag: etag ?? `"${file.size}"` }] });
         } else {
           await api.uploadComplete({ fileId: init.fileId, parts: [] });
         }
+        setProgress(100);
       }
       setStatus("Upload complete.");
       queryClient.invalidateQueries({ queryKey: ["recent"] });
@@ -71,7 +70,12 @@ export function UploadModal({ onClose, folderId = undefined }: { onClose: () => 
           <span className="text-sm text-muted-foreground">Drag & drop or click to choose</span>
           <input type="file" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
         </label>
-        <p className="mt-4 min-h-5 font-mono text-xs text-muted-foreground">{busy ? "Working…" : status}</p>
+        <p className="mt-4 min-h-5 font-mono text-xs text-muted-foreground">{busy ? `${status} ${progress}%` : status}</p>
+        {busy && (
+          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+            <div className="h-full rounded-full bg-primary transition-[width] duration-200" style={{ width: `${progress}%` }} />
+          </div>
+        )}
       </div>
     </div>
   );

@@ -4,6 +4,36 @@ export type ApiError = { error: { code: string; message: string } };
 
 let refreshingPromise: Promise<boolean> | null = null;
 
+export function uploadBinary(
+  url: string,
+  file: Blob,
+  onProgress?: (percent: number) => void,
+): Promise<{ etag: string | null }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url, true);
+    xhr.withCredentials = true;
+    xhr.timeout = 10 * 60 * 1000;
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress?.(Math.min(99, Math.round((event.loaded / event.total) * 100)));
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(100);
+        resolve({ etag: xhr.getResponseHeader("etag") });
+        return;
+      }
+      reject(new Error(`Upload failed (${xhr.status}): ${xhr.responseText || xhr.statusText}`));
+    };
+    xhr.onerror = () => reject(new Error("Network error while uploading. Please retry."));
+    xhr.ontimeout = () => reject(new Error("Upload timed out. Please retry."));
+    xhr.send(file);
+  });
+}
+
 async function refreshTokenIfNeeded(): Promise<boolean> {
   if (!refreshingPromise) {
     refreshingPromise = (async () => {
