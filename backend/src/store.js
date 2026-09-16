@@ -429,38 +429,44 @@ if (process.env.DATABASE_URL) {
     try {
       if (!pool) return;
 
-      // 1. Ensure database schema and critical tables exist
-      try {
-        const schemaPath = path.join(__dirname, "../sql/schema.sql");
-        if (fs.existsSync(schemaPath)) {
-          const schemaSql = fs.readFileSync(schemaPath, "utf8");
-          await pool.query(schemaSql);
-          console.log("PostgreSQL schema synchronized.");
+      // Runtime DDL is useful for local development, but it adds several
+      // seconds to every cold Vercel function. Production databases should be
+      // migrated during deployment, not while serving the first request.
+      const shouldSyncSchema = !process.env.VERCEL || process.env.DB_SYNC_SCHEMA === "true";
+      if (shouldSyncSchema) {
+        try {
+          const schemaPath = path.join(__dirname, "../sql/schema.sql");
+          if (fs.existsSync(schemaPath)) {
+            const schemaSql = fs.readFileSync(schemaPath, "utf8");
+            await pool.query(schemaSql);
+            console.log("PostgreSQL schema synchronized.");
+          }
+        } catch (schemaErr) {
+          console.warn("Schema sync skipped/failed:", schemaErr.message);
         }
-      } catch (schemaErr) {
-        console.warn("Schema sync skipped/failed:", schemaErr.message);
+
+        try {
+          await pool.query(`
+            CREATE TABLE IF NOT EXISTS refresh_tokens (
+              token TEXT PRIMARY KEY,
+              user_id UUID,
+              jti TEXT,
+              created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+          `);
+        } catch (e) {
+          console.warn("Table check failed:", e.message);
+        }
+
+        try {
+          await pool.query("ALTER TABLE file_versions ADD COLUMN IF NOT EXISTS file_data bytea");
+        } catch (e) {
+          console.warn("Column check failed:", e.message);
+        }
       }
 
-      try {
-        await pool.query(`
-          CREATE TABLE IF NOT EXISTS refresh_tokens (
-            token TEXT PRIMARY KEY,
-            user_id UUID,
-            jti TEXT,
-            created_at TIMESTAMPTZ DEFAULT NOW()
-          )
-        `);
-      } catch (e) {
-        console.warn("Table check failed:", e.message);
-      }
-
-      try {
-        await pool.query("ALTER TABLE file_versions ADD COLUMN IF NOT EXISTS file_data bytea");
-      } catch (e) {
-        console.warn("Column check failed:", e.message);
-      }
-
-      // 2. Load records from DB into local cache
+      // Load records in parallel so a cold serverless instance does not wait
+      // on ten independent round trips one after another.
       const tables = [
         { key: "users", name: "users", pk: "id" },
         { key: "folders", name: "folders", pk: "id" },
@@ -475,12 +481,12 @@ if (process.env.DATABASE_URL) {
         { key: "notifications", name: "notifications", pk: "id" }
       ];
 
-      for (const t of tables) {
+      await Promise.all(tables.map(async (t) => {
         try {
-          const query = t.name === "file_versions" 
+          const query = t.name === "file_versions"
             ? "SELECT id, file_id, version_number, storage_key, size_bytes, checksum, created_at FROM file_versions"
             : `SELECT * FROM ${t.name}`;
-            
+
           const res = await pool.query(query);
           mem[t.key].length = 0;
           for (const row of res.rows) {
@@ -492,7 +498,7 @@ if (process.env.DATABASE_URL) {
         } catch (tableErr) {
           console.warn(`Table ${t.name} query failed:`, tableErr.message);
         }
-      }
+      }));
 
       // Load refresh tokens Map
       try {
