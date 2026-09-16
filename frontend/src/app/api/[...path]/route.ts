@@ -28,6 +28,13 @@ async function handle(req: NextRequest) {
         headers[key] = val;
       });
 
+      // Explicitly populate the HTTP 'cookie' header string from NextRequest cookies
+      const rawCookies = req.cookies.getAll();
+      const cookiePairs = rawCookies.map((c) => `${c.name}=${c.value}`);
+      if (cookiePairs.length > 0) {
+        headers["cookie"] = cookiePairs.join("; ");
+      }
+
       let statusCode = 200;
       const resHeaders = new Headers();
 
@@ -45,7 +52,16 @@ async function handle(req: NextRequest) {
         return mockRes;
       };
       mockRes.setHeader = (name: string, value: any) => {
-        resHeaders.set(name, Array.isArray(value) ? value.join(", ") : String(value));
+        const lower = name.toLowerCase();
+        if (lower === "set-cookie") {
+          if (Array.isArray(value)) {
+            value.forEach((v) => resHeaders.append("Set-Cookie", String(v)));
+          } else {
+            resHeaders.append("Set-Cookie", String(value));
+          }
+        } else {
+          resHeaders.set(name, Array.isArray(value) ? value.join(", ") : String(value));
+        }
         return mockRes;
       };
       mockRes.getHeader = (name: string) => resHeaders.get(name);
@@ -73,7 +89,7 @@ async function handle(req: NextRequest) {
         statusCode = code;
         mockRes.statusCode = code;
         if (headersObj) {
-          Object.keys(headersObj).forEach(k => resHeaders.set(k, headersObj[k]));
+          Object.keys(headersObj).forEach((k) => mockRes.setHeader(k, headersObj[k]));
         }
         return mockRes;
       };
@@ -100,10 +116,9 @@ async function handle(req: NextRequest) {
       };
 
       const dispatch = (parsedBody: any) => {
-        const rawCookies = req.cookies.getAll();
         const cookieMap: Record<string, string> = {};
         if (Array.isArray(rawCookies)) {
-          rawCookies.forEach(c => { if (c && c.name) cookieMap[c.name] = c.value; });
+          rawCookies.forEach((c) => { if (c && c.name) cookieMap[c.name] = c.value; });
         }
 
         const mockReq: any = {
