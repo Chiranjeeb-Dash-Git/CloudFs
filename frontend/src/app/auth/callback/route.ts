@@ -103,12 +103,14 @@ export async function GET(request: Request) {
           quotaBytes: mem.DEFAULT_QUOTA_BYTES,
           createdAt: mem.now(),
         };
-        mem.users.push(dbUser);
       } else {
         dbUser.providers = { ...(dbUser.providers || {}), google: { sub: rawSub, email: userEmail } };
         if (rawAvatar) dbUser.imageUrl = rawAvatar;
         if (rawName) dbUser.name = rawName;
       }
+
+      // Save user profile synchronously to database before issuing tokens
+      await mem.saveUser(dbUser);
 
       const finalRes = applyCookies(NextResponse.redirect(`${origin}${next}`));
 

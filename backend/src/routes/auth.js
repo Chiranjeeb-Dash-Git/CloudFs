@@ -300,10 +300,9 @@ authRouter.post("/google", async (req, res, next) => {
         createdAt: mem.now(),
       };
       try {
-        mem.users.push(user);
+        await mem.saveUser(user);
       } catch (pushErr) {
         console.error("[Google OAuth] Failed to save user to store:", pushErr);
-        // Don't crash, just log and continue if possible or fail gracefully
         return res.status(500).json({ error: { code: "STORAGE_ERROR", message: "Could not create user profile" } });
       }
     } else {
@@ -312,6 +311,7 @@ authRouter.post("/google", async (req, res, next) => {
         user.providers = { ...(user.providers || {}), google: { sub: body.googleSub, email: body.email.toLowerCase() } };
         if (body.imageUrl) user.imageUrl = body.imageUrl;
         if (body.name) user.name = body.name;
+        await mem.saveUser(user);
       } catch (updateErr) {
         console.error("[Google OAuth] Failed to update user metadata:", updateErr);
       }

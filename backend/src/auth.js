@@ -48,12 +48,15 @@ export function recordSession(userId, req, jti) {
     createdAt: mem.now(),
     revokedAt: null,
   };
-  mem.sessions.push(session);
+  mem.saveSession(session);
   // Cap to last 20 sessions per user
   const mine = mem.sessions.filter((s) => s.userId === userId && !s.revokedAt);
   if (mine.length > 20) {
     const overflow = mine.slice(0, mine.length - 20);
-    for (const s of overflow) s.revokedAt = mem.now();
+    for (const s of overflow) {
+      s.revokedAt = mem.now();
+      mem.saveSession(s);
+    }
   }
   return session;
 }

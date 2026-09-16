@@ -115,6 +115,58 @@ export function createMemoryStore() {
     storageUsed,
     quotaFor,
     DEFAULT_QUOTA_BYTES,
+    saveUser: async (user) => {
+      let existingIndex = users.findIndex((u) => u.id === user.id);
+      if (existingIndex >= 0) {
+        users[existingIndex] = user;
+      } else {
+        users.push(user);
+      }
+      if (pool) {
+        try {
+          const snakeItem = toSnakeCase(user);
+          const keys = Object.keys(snakeItem);
+          const values = Object.values(snakeItem);
+          const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
+          const updateClauses = keys.map((k) => `${k} = EXCLUDED.${k}`).join(", ");
+          const query = `
+            INSERT INTO users (${keys.join(", ")})
+            VALUES (${placeholders})
+            ON CONFLICT (id) DO UPDATE SET ${updateClauses}
+          `;
+          await pool.query(query, values);
+        } catch (err) {
+          console.error("[store] saveUser DB error:", err.message);
+        }
+      }
+      return user;
+    },
+    saveSession: async (session) => {
+      let existingIndex = sessions.findIndex((s) => s.id === session.id);
+      if (existingIndex >= 0) {
+        sessions[existingIndex] = session;
+      } else {
+        sessions.push(session);
+      }
+      if (pool) {
+        try {
+          const snakeItem = toSnakeCase(session);
+          const keys = Object.keys(snakeItem);
+          const values = Object.values(snakeItem);
+          const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
+          const updateClauses = keys.map((k) => `${k} = EXCLUDED.${k}`).join(", ");
+          const query = `
+            INSERT INTO sessions (${keys.join(", ")})
+            VALUES (${placeholders})
+            ON CONFLICT (id) DO UPDATE SET ${updateClauses}
+          `;
+          await pool.query(query, values);
+        } catch (err) {
+          console.error("[store] saveSession DB error:", err.message);
+        }
+      }
+      return session;
+    },
     findUser: async (id, googleSub, email) => {
       let u = users.find((x) => 
         (id && x.id === id) || 
