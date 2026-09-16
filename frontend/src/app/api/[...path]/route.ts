@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ServerResponse } from "node:http";
+import { Readable } from "node:stream";
 import { createApp } from "../../../../../backend/src/app.js";
 import { ensureStoreReady } from "../../../../../backend/src/store.js";
 
@@ -44,7 +45,6 @@ async function handle(req: NextRequest) {
       mockRes._headerNames = {};
       mockRes._removedHeader = {};
       mockRes._header = true;
-      mockRes.headersSent = false;
 
       mockRes.status = (code: number) => {
         statusCode = code;
@@ -121,7 +121,15 @@ async function handle(req: NextRequest) {
           rawCookies.forEach((c) => { if (c && c.name) cookieMap[c.name] = c.value; });
         }
 
-        const mockReq: any = {
+        // Express's body parser expects a real readable request stream. A plain
+        // object works for GETs but makes every JSON POST fail with
+        // "stream is not readable" before the route handler runs.
+        const mockReq: any = Readable.from(
+          method === "GET" || method === "HEAD" || method === "OPTIONS"
+            ? []
+            : [JSON.stringify(parsedBody || {})],
+        );
+        Object.assign(mockReq, {
           method,
           url,
           originalUrl: url,
@@ -138,18 +146,9 @@ async function handle(req: NextRequest) {
           header(name: string) {
             return this.get(name);
           },
-          on: () => mockReq,
-          once: () => mockReq,
-          emit: () => false,
-          removeListener: () => mockReq,
-          removeAllListeners: () => mockReq,
-          pipe: () => mockReq,
-          unpipe: () => mockReq,
-          resume: () => mockReq,
-          pause: () => mockReq,
           socket: { encrypted: true, remoteAddress: "127.0.0.1" },
           connection: { encrypted: true, remoteAddress: "127.0.0.1" },
-        };
+        });
 
         mockRes.req = mockReq;
         mockRes.get = (n: string) => resHeaders.get(n);
