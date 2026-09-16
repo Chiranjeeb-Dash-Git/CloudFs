@@ -41,6 +41,7 @@ export function UploadModal({ onClose, folderId = undefined }: { onClose: () => 
       queryClient.invalidateQueries({ queryKey: ["storage"] });
       queryClient.invalidateQueries({ queryKey: ["search"] });
       queryClient.invalidateQueries({ queryKey: ["folder"] });
+      queryClient.invalidateQueries({ queryKey: ["folderTree"] });
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Upload failed");
     } finally {

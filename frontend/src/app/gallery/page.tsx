@@ -301,9 +301,11 @@ function FileModalViewer({ file }: { file: FileItem }) {
         if (file.type === "pdf") {
           mime = "application/pdf";
         } else if (file.type === "photo") {
-          mime = "image/jpeg";
+          // Preserve the real image MIME type. HEIC/HEIF and newer formats
+          // must not be mislabeled as JPEG or PDF.
+          mime = file.mimeType || rawBlob.type || "image/*";
         } else if (file.type === "video") {
-          mime = "video/mp4";
+          mime = file.mimeType || rawBlob.type || "video/*";
         }
         
         const blob = new Blob([rawBlob], { type: mime });
@@ -328,7 +330,7 @@ function FileModalViewer({ file }: { file: FileItem }) {
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [file.id, file.type]);
+  }, [file.id, file.type, file.mimeType]);
 
   // Handle zooming using buttons or shortcuts
   const zoomBy = (factor: number, cx?: number, cy?: number) => {
@@ -407,8 +409,11 @@ function FileModalViewer({ file }: { file: FileItem }) {
 
   if (error) {
     return (
-      <div className="flex h-full w-full items-center justify-center font-mono text-xs text-red-500 bg-black/20">
-        ERROR: {error}
+      <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-black/20 px-6 text-center font-mono text-xs text-red-300">
+        <span>PREVIEW UNAVAILABLE: {error}</span>
+        <a className="rounded-full border border-white/20 px-4 py-2 text-white/80 hover:bg-white/10" href={`/api/files/${file.id}/download`} download={file.name}>
+          Download original
+        </a>
       </div>
     );
   }
@@ -528,6 +533,7 @@ function FileModalViewer({ file }: { file: FileItem }) {
               alt={file.name} 
               className="max-h-[75vh] w-auto object-contain block select-none pointer-events-none" 
               draggable={false}
+              onError={() => setError(`This ${file.mimeType || "image"} format is not previewable in this browser.`)}
             />
           )}
 
@@ -590,6 +596,7 @@ function FileModalViewer({ file }: { file: FileItem }) {
 interface FileItem {
   id: string;
   type: string;
+  mimeType: string;
   seed: number;
   name: string;
   size: string;
@@ -754,20 +761,24 @@ function formatBytes(bytes: number, decimals = 1) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
 }
 
-function mimeToType(mime: string): "photo" | "video" | "pdf" | "audio" {
-  if (mime.startsWith("image/")) return "photo";
-  if (mime.startsWith("video/")) return "video";
-  if (mime.startsWith("audio/")) return "audio";
-  if (mime.includes("pdf")) return "pdf";
+function mimeToType(mime: string, name = ""): "photo" | "video" | "pdf" | "audio" {
+  const normalizedMime = String(mime || "").toLowerCase();
+  const extension = name.toLowerCase().split(".").pop() || "";
+  const imageExtensions = new Set(["jpg", "jpeg", "png", "gif", "webp", "avif", "bmp", "heic", "heif", "tif", "tiff"]);
+  if (normalizedMime.startsWith("image/") || imageExtensions.has(extension)) return "photo";
+  if (normalizedMime.startsWith("video/")) return "video";
+  if (normalizedMime.startsWith("audio/")) return "audio";
+  if (normalizedMime.includes("pdf") || extension === "pdf") return "pdf";
   return "pdf"; // fallback for docs
 }
 
 function fileToItem(f: DriveFile, idx: number): FileItem {
-  const type = mimeToType(f.mimeType);
+  const type = mimeToType(f.mimeType, f.name);
   const ago = timeAgo(f.createdAt);
   return {
     id: f.id,
     type,
+    mimeType: f.mimeType || "application/octet-stream",
     seed: Math.abs(hashCode(f.id)) % 100,
     name: f.name,
     size: formatBytes(f.sizeBytes),
