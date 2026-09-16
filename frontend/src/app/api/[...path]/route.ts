@@ -124,11 +124,12 @@ async function handle(req: NextRequest) {
         // Express's body parser expects a real readable request stream. A plain
         // object works for GETs but makes every JSON POST fail with
         // "stream is not readable" before the route handler runs.
-        const mockReq: any = Readable.from(
-          method === "GET" || method === "HEAD" || method === "OPTIONS"
+        const streamChunks = Buffer.isBuffer(parsedBody)
+          ? [parsedBody]
+          : method === "GET" || method === "HEAD" || method === "OPTIONS"
             ? []
-            : [JSON.stringify(parsedBody || {})],
-        );
+            : [JSON.stringify(parsedBody || {})];
+        const mockReq: any = Readable.from(streamChunks);
         Object.assign(mockReq, {
           method,
           url,
@@ -186,8 +187,16 @@ async function handle(req: NextRequest) {
         }
       };
 
+      const isBinaryUpload = method === "PUT" && fullPath.endsWith("/bytes");
       if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
         dispatch({});
+      } else if (isBinaryUpload) {
+        // File uploads are raw bytes, not JSON. Parsing them as JSON causes the
+        // fallback `{}` body to disagree with Content-Length in Express.
+        req.arrayBuffer().then(
+          (body) => dispatch(Buffer.from(body)),
+          () => dispatch(Buffer.alloc(0)),
+        );
       } else {
         req.json().then(
           (b) => dispatch(b),
